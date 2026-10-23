@@ -5,6 +5,7 @@ import type { Conversation, Message } from '../data/chat.ts';
 import { createGuesses } from '../lib/guess.ts';
 import { runtime } from '../lib/runtime.ts';
 import { createApiSource, type ChatScope, type ChatSource, type ConversationRow } from '../services/chat.source.ts';
+import { EDIT_HOURS } from '../../../backend/src/domains/chat/edits.ts';
 import { THREAD_PAGE } from '../../../backend/src/domains/chat/pages.ts';
 import { useAccount } from './account.store.ts';
 import { useGroups } from './groups.store.ts';
@@ -91,6 +92,21 @@ export interface ChatApi
     discard(message: Message): void;
     replyTo(id: string): Message | null;
     setReplyTo(id: string, message: Message | null): void;
+
+    /** A line of the reader's own the server has, still words and still within two days of being written. */
+    editable(message: Message): boolean;
+
+    /** The line being edited in a conversation, and the words it will say, while the composer holds them. */
+    editing(id: string): { message: Message; text: string } | null;
+    beginEdit(id: string, message: Message): void;
+    editText(id: string, text: string): void;
+    cancelEdit(id: string): void;
+
+    /** Saves what the composer holds as the line's new words, and leaves editing. Nothing written is nothing saved. */
+    saveEdit(id: string): Promise<void>;
+
+    /** New words for a line of the reader's, shown at the press and taken back when refused. */
+    edit(message: Message, text: string): Promise<void>;
     react(message: Message, emoji: string): Promise<void>;
     remove(message: Message): Promise<void>;
     forward(message: Message, to: string): Promise<void>;
@@ -385,6 +401,29 @@ export const useChat = createStore((): ChatApi =>
 
     const [replies, setReplies] = createSignal<Record<string, Message>>({});
 
+    const [edits, setEdits] = createSignal<Record<string, { message: Message; text: string }>>({});
+
+    const leaveEdit = (id: string) =>
+        setEdits((current) => (current[id] === undefined ? current : Object.fromEntries(Object.entries(current).filter(([key]) => key !== id))));
+
+    const editLine = async (message: Message, words: string) =>
+    {
+        const clean = words.trim();
+
+        if (clean === '' || clean === message.text)
+        {
+            return;
+        }
+
+        const at = runtime().clock.now();
+
+        await guesses.during(
+            (list) => list.map((one) => (one.id !== message.id ? one : { ...one, text: clean, edited: { id: '', at, plain: '', frankingKey: '' } })),
+            () => active.edit(message.conversationId, untrack(meId), message.id, clean, at, message.expiresAt ?? 0),
+            reread
+        );
+    };
+
     const lifetimeOf = (id: string, at: number) =>
     {
         const after = rowOf(id)?.conversation.expireAfter ?? null;
@@ -621,6 +660,46 @@ export const useChat = createStore((): ChatApi =>
                 : { ...current, [id]: message });
         },
 
+        editable(message)
+        {
+            return message.kind === 'text'
+                && message.from === untrack(meId)
+                && message.locked === undefined
+                && message.outgoing === undefined
+                && message.forwarded !== true
+                && runtime().clock.now() - message.at < EDIT_HOURS * 3_600_000;
+        },
+
+        editing: (id) => edits()[id] ?? null,
+
+        beginEdit(id, message)
+        {
+            setReplies((current) => Object.fromEntries(Object.entries(current).filter(([key]) => key !== id)));
+            setEdits((current) => ({ ...current, [id]: { message, text: message.text } }));
+        },
+
+        editText(id, words)
+        {
+            setEdits((current) => (current[id] === undefined || current[id].text === words ? current : { ...current, [id]: { ...current[id], text: words } }));
+        },
+
+        cancelEdit: leaveEdit,
+
+        async saveEdit(id)
+        {
+            const held = untrack(edits)[id];
+
+            if (held === undefined || held.text.trim() === '')
+            {
+                return;
+            }
+
+            leaveEdit(id);
+            await editLine(held.message, held.text);
+        },
+
+        edit: editLine,
+
         async react(message, emoji)
         {
             const me = untrack(meId);
@@ -786,6 +865,8 @@ export const useChat = createStore((): ChatApi =>
             setSeen({});
             setTypists({});
             setDrafts({});
+            setReplies({});
+            setEdits({});
             places.clear();
             setPins({});
             setOutbox([]);

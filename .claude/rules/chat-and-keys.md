@@ -812,7 +812,8 @@ it. A fake handing the browser plaintext would be testing a wire format this pro
 build and the rules it left behind.
 
 **The plaintext is a document now, and `lib/body.ts` is the only thing that writes or reads it.** A
-text message seals `{"text", "reply"?, "fwd"?}` and a reaction seals `{"react", "on"}`. It was the
+text message seals `{"text", "reply"?, "fwd"?}`, a reaction `{"react", "on"}` and an edit
+`{"edit", "on"}`. It was the
 fourth hard cutover of what goes inside the ciphertext, taken for the same reason as the first three:
 nothing has shipped. The envelope, the AAD, the signature and the franking construction did not move.
 A document that does not parse opens as `tampered`, and the franking commitment covers the whole
@@ -837,9 +838,38 @@ same number out twice; a reply has to be able to say its original was deleted ra
 loaded; and every browser holding the plaintext in its search archive evicts it when it sees the
 tombstone. The thread never draws one. Reactions on a deleted message go in the same transaction.
 
-**Unread, the list preview, notifications and push all ignore reactions and tombstones.** A reaction
-that rang "new message" would be the most annoying feature in the product, and one that bumped the
-list would reorder somebody's inbox because a friend pressed a thumb.
+**Unread, the list preview, notifications and push all ignore reactions, edits and tombstones.** A
+reaction that rang "new message" would be the most annoying feature in the product, and one that
+bumped the list would reorder somebody's inbox because a friend pressed a thumb.
+
+**A line is edited by whoever wrote it, for two days, and an edit is a sealed row about the line**
+(Telegram's window, `EDIT_HOURS` in `domains/chat/edits.ts`, which both halves read). It is kind
+`edit`, sealed as a reaction is, its target in the clear (`messages_about_has_target`). The server
+takes one only for a text line of the editor's own in that room, under two days old and still
+alive, and answers anything else in one 404 ("There is no line of yours here to edit."); and only
+with the line's own life, refusing any other (403): an edit that lasted longer would keep its words
+after the line was gone, and a shorter one would bring the old words back when it ran out.
+
+- **Read with its line.** A page hands each line its newest edit by whoever wrote it (`distinct
+  on`), the list's last line its newest too, and neither counts an edit as unread nor moves a room
+  up the list. Deleting a line takes its edits with it. An edit rings the room and writes no
+  notification.
+- **Believed only from the line's author.** Every reader opens the edit with its line and takes it
+  only from whoever signed the line, about that line (`decodeEdit` asks `on`), and still alive;
+  anything else is no edit at all, whatever the server handed over.
+- **A report of an edited line discloses the edit.** The line keeps its own document (`plain`) and
+  carries the edit's (`edited`), franking checks the edit row as it checks a line
+  (`frankedMessage` takes `edit`), and the staff's report page reads either document
+  (`decodeDisclosed`) and says when it was an edit.
+- **In the browser.** Edit follows Reply in a line's sheet and menu for the reader's own words
+  within the window, never a forwarded line, and Up in an empty composer edits the newest such line.
+  The composer holds the new words apart from the draft, says what is being edited, leaves it at
+  Escape with the draft as it was, and offers Save in place of Send. The line shows its new words
+  and "edited" at the press, taken back with the refusal's sentence, at a table as in a thread.
+
+`chat-edit.db.spec.ts`, `social.spec.ts` (*a line the reader edits*), `sealing.spec.ts` (*a line its
+author edited*), `markdown.spec.ts`, `bubble.spec.ts`, `chat-page.spec.ts`, `table-chat.spec.ts`
+and `admin-report.spec.ts` hold it.
 
 **The emoji picker is never a modal on a pointer.** One `EmojiPopover`, hosted in the shell and
 opened through `useEmojiPop`, anchors itself to whatever asked - the composer bar, a message's hover

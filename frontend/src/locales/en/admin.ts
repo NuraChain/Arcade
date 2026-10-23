@@ -273,6 +273,7 @@ export const admin = {
     'admin.report.messageNone': 'No message came with this report.',
     'admin.report.messageUnread': 'The message that came with it could not be read.',
     'admin.report.forwarded': 'Forwarded',
+    'admin.report.edited': 'Edited: the words it had when it was reported',
     'admin.report.together': 'Their games together',
     'admin.report.togetherNone': 'They have not played together lately.',
     'admin.report.live': 'Being played',

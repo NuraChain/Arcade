@@ -11,6 +11,13 @@ export interface ReactionBody
     on: string;
 }
 
+/** What a line says now, sealed by whoever wrote it and naming the line it changes. */
+export interface EditBody
+{
+    edit: string;
+    on: string;
+}
+
 const EMOJI = /^(?:\p{Extended_Pictographic}|\p{Regional_Indicator}|[#*0-9]️?⃣)/u;
 
 const graphemes = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
@@ -51,6 +58,11 @@ export function encodeReaction(body: ReactionBody)
     return JSON.stringify({ react: body.react, on: body.on });
 }
 
+export function encodeEdit(body: EditBody)
+{
+    return JSON.stringify({ edit: body.edit, on: body.on });
+}
+
 export function decodeText(raw: string): TextBody | null
 {
     const found = documentOf(raw);
@@ -82,4 +94,40 @@ export function decodeReaction(raw: string, target: string): string | null
     }
 
     return found.react;
+}
+
+/**
+ * A line as a report disclosed it: its words, or the edit that gave it the words it had when it was
+ * reported, which the report carries in the line's place. Franking checked the document at filing.
+ */
+export function decodeDisclosed(raw: string): (TextBody & { edited?: true }) | null
+{
+    const said = decodeText(raw);
+
+    if (said !== null)
+    {
+        return said;
+    }
+
+    const found = documentOf(raw);
+
+    return found === null || typeof found.edit !== 'string' || typeof found.on !== 'string' || found.edit.trim() === ''
+        ? null
+        : { text: found.edit, edited: true };
+}
+
+/**
+ * The words an edit gives its line, or null. The line it names is checked against the line it was
+ * handed with, because that column is in the clear and a server could move an edit onto another.
+ */
+export function decodeEdit(raw: string, target: string): string | null
+{
+    const found = documentOf(raw);
+
+    if (found === null || typeof found.edit !== 'string' || found.on !== target || found.edit.trim() === '')
+    {
+        return null;
+    }
+
+    return found.edit;
 }

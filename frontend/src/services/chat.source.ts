@@ -1,7 +1,7 @@
 import { ApiError, client } from '../api.ts';
 import type { ChatMessage } from '../api.ts';
 import type { Conversation, Message, MessageKind, Reaction } from '../data/chat.ts';
-import { decodeReaction, decodeText, encodeReaction, encodeText } from '../lib/body.ts';
+import { decodeEdit, decodeReaction, decodeText, encodeEdit, encodeReaction, encodeText } from '../lib/body.ts';
 import { forget } from '../lib/crypto.ts';
 import { runtime } from '../lib/runtime.ts';
 import { keyStore } from '../lib/device-keys.ts';
@@ -91,6 +91,9 @@ export interface ChatSource
      */
     post(message: Message, expiresAt?: number): Promise<void>;
     react(conversationId: string, from: string, target: string, emoji: string, at: number, expiresAt: number): Promise<void>;
+
+    /** Seals new words for a line of the reader's, to last exactly as long as the line does. */
+    edit(conversationId: string, from: string, target: string, text: string, at: number, expiresAt: number): Promise<void>;
     remove(conversationId: string, messageId: string): Promise<void>;
     openDirect(scope: ChatScope, personId: string, at: number): Promise<string>;
     archive(scope: ChatScope): Message[];
@@ -233,7 +236,7 @@ export function createApiSource()
         wire: ChatMessage,
         text: string,
         locked: MessageFailure | null,
-        signed?: { from: string; frankingKey: string; plain: string; reply?: string; fwd?: true; reactions: Reaction[] }
+        signed?: { from: string; frankingKey: string; plain: string; reply?: string; fwd?: true; reactions: Reaction[]; edited?: Message['edited'] }
     ) =>
     {
         const said = wire.payload?.params ?? {};
@@ -252,6 +255,7 @@ export function createApiSource()
             ...(signed?.reply === undefined ? {} : { reply: signed.reply }),
             ...(signed?.fwd === true ? { forwarded: true } : {}),
             ...(signed === undefined || signed.reactions.length === 0 ? {} : { reactions: signed.reactions }),
+            ...(signed?.edited === undefined ? {} : { edited: signed.edited }),
             ...(wire.payload === undefined ? {} : { line: { key: wire.payload.key, params } }),
             ...(wire.expiresAt === undefined ? {} : { expiresAt: Date.parse(wire.expiresAt) }),
             ...(wire.read === true ? { read: true } : {}),
@@ -372,14 +376,52 @@ export function createApiSource()
             return asMessage(born, wire, '', 'tampered');
         }
 
-        return asMessage(born, wire, body.text, null, {
+        const edit = await openEdit(born, wire, read.from, keyFor);
+
+        return asMessage(born, wire, edit?.words ?? body.text, null, {
             from: read.from,
             frankingKey: read.frankingKey,
             plain: read.text,
             ...(body.reply === undefined ? {} : { reply: body.reply }),
             ...(body.fwd === true ? { fwd: true as const } : {}),
-            reactions: await openReactions(born, wire, keyFor)
+            reactions: await openReactions(born, wire, keyFor),
+            ...(edit === null ? {} : { edited: edit.edited })
         });
+    };
+
+    /**
+     * What a line says now: its newest edit by whoever wrote it, opened and checked as the line
+     * was. An edit by anybody else, about another line, that has run out or that will not open is
+     * no edit at all, whatever the server handed over with the line.
+     */
+    const openEdit = async (
+        born: number,
+        wire: ChatMessage,
+        author: string,
+        keyFor: (epoch: number) => Promise<Uint8Array | null>
+    ) =>
+    {
+        const now = runtime().clock.now();
+        let newest: { words: string; edited: NonNullable<Message['edited']> } | null = null;
+
+        for (const one of wire.edits ?? [])
+        {
+            if (one.expiresAt !== undefined && Date.parse(one.expiresAt) <= now)
+            {
+                continue;
+            }
+
+            const found = await openCached(born, one, keyFor);
+            const words = 'text' in found && found.from === author ? decodeEdit(found.text, one.target) : null;
+            const at = Date.parse(one.clientAt);
+
+            if (words !== null && 'text' in found && (newest === null || at > newest.edited.at))
+            {
+                newest = { words, edited: { id: one.id, at, plain: found.text, frankingKey: found.frankingKey } };
+            }
+        }
+
+        return newest;
     };
 
     const openReactions = async (
@@ -414,7 +456,7 @@ export function createApiSource()
         plain: string,
         at: number,
         expiresAt: number,
-        kind: 'text' | 'reaction',
+        kind: 'text' | 'reaction' | 'edit',
         target?: string,
         id?: string
     ) =>
@@ -593,6 +635,11 @@ export function createApiSource()
         async react(conversationId, from, target, emoji, at, expiresAt)
         {
             await deliver(conversationId, from, encodeReaction({ react: emoji, on: target }), at, expiresAt, 'reaction', target);
+        },
+
+        async edit(conversationId, from, target, words, at, expiresAt)
+        {
+            await deliver(conversationId, from, encodeEdit({ edit: words, on: target }), at, expiresAt, 'edit', target);
         },
 
         async remove(conversationId, messageId)

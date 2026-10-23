@@ -1,11 +1,12 @@
-import { describe, it, expect, beforeEach, afterAll } from 'vitest';
+import { describe, it, expect, beforeEach, afterAll, afterEach } from 'vitest';
 
 import { recipientList } from '../../backend/src/domains/chat/envelope.ts';
 import { setKeyStore } from '../src/lib/device-keys.ts';
 import { currentEpoch, forgetSigners } from '../src/lib/sealing.ts';
 import { forgetArchive } from '../src/services/chat.source.ts';
 import { createApiSource, type ChatScope } from '../src/services/chat.source.ts';
-import { runtime } from '../src/lib/runtime.ts';
+import { manualClock } from '../src/lib/clock.ts';
+import { resetRuntime, runtime, setRuntime } from '../src/lib/runtime.ts';
 import type { ChatMessage } from '../src/api.ts';
 import type { Message } from '../src/data/chat.ts';
 import { server, fixtureDevice } from './fake-api.ts';
@@ -621,5 +622,112 @@ describe('replies, reactions and deletions, all inside the seal', () =>
         const thread = (await source.thread(THREAD, scope, new AbortController().signal)).messages;
         expect(thread.map((message) => message.kind)).toEqual(['deleted']);
         expect(source.archive(scope).map((message) => message.text)).not.toContain('regrettable');
+    });
+});
+
+describe('a line its author edited, opened and checked', () =>
+{
+    const signal = new AbortController().signal;
+
+    afterEach(() =>
+    {
+        resetRuntime();
+    });
+
+    it('reads a line as its newest edit, and keeps what the edit sealed for a report', async () =>
+    {
+        const source = createApiSource();
+        await source.post(said('first words'));
+        const line = server.messages[0];
+
+        await source.edit(THREAD, 'alex', line.id, 'second words', 1_700_000_000_500, 0);
+        const older = line.edits![0];
+
+        await source.edit(THREAD, 'alex', line.id, 'third words', 1_700_000_000_900, 0);
+        const newest = line.edits![0];
+
+        const thread = (await source.thread(THREAD, scope, signal)).messages;
+
+        expect(thread.map((one) => one.text), 'one line, saying what it says now').toEqual(['third words']);
+        expect(thread[0].edited).toMatchObject({ id: newest.id, at: 1_700_000_000_900 });
+        expect(thread[0].edited?.plain, 'the edit’s own document, for a report').toContain('"edit"');
+        expect(thread[0].plain, 'and the line’s own is still its first words').toContain('first words');
+        expect(source.archive(scope).map((one) => one.text), 'found by its new words').toEqual(['third words']);
+
+        const rows = (await source.conversations(scope, signal)).rows;
+
+        expect(rows[0].last?.text, 'the list’s last line too').toBe('third words');
+
+        for (const order of [[older, newest], [newest, older]])
+        {
+            line.edits = order;
+            forgetSigners();
+
+            expect((await source.thread(THREAD, scope, signal)).messages[0].text, 'the newest by when its writer made it, in whatever order').toBe('third words');
+        }
+    });
+
+    it('believes an edit only from whoever wrote the line', async () =>
+    {
+        const source = createApiSource();
+        await source.post(said('words of mine'));
+        const line = server.messages[0];
+
+        // Sara seals words for Alex's line and the server hands them over with it.
+        server.me = 'sara.k';
+        server.sealDevice = theirs.id;
+        setKeyStore(heldKeyStore(theirs));
+        forgetSigners();
+        line.from = 'sara.k';
+        await createApiSource().edit(THREAD, 'sara.k', line.id, 'words put in a mouth', 1_700_000_000_500, 0);
+        line.from = 'alex';
+        server.me = 'alex';
+        server.sealDevice = mine.id;
+        setKeyStore(heldKeyStore(mine));
+        forgetSigners();
+
+        expect(line.edits, 'the server holds it').toHaveLength(1);
+
+        const thread = (await source.thread(THREAD, scope, signal)).messages;
+
+        expect([thread[0].text, thread[0].edited]).toEqual(['words of mine', undefined]);
+    });
+
+    it('drops an edit the server moved onto another line', async () =>
+    {
+        const source = createApiSource();
+        await source.post(said('one'));
+        await source.post(said('two'));
+        const [one, two] = server.messages;
+
+        await source.edit(THREAD, 'alex', one.id, 'one, changed', 1_700_000_000_500, 0);
+
+        two.edits = one.edits!.map((edit) => ({ ...edit, target: two.id }));
+        delete one.edits;
+        forgetSigners();
+
+        expect((await source.thread(THREAD, scope, signal)).messages.map((line) => [line.text, line.edited])).toEqual([['one', undefined], ['two', undefined]]);
+    });
+
+    it('drops an edit once the moment its writer sealed into it has passed', async () =>
+    {
+        const clock = manualClock(Date.now());
+
+        setRuntime({ clock, seed: 4 });
+
+        const source = createApiSource();
+        await source.post(said('one'));
+        const line = server.messages[0];
+
+        const until = clock.now() + 60_000;
+
+        await source.edit(THREAD, 'alex', line.id, 'one, for a while', clock.now(), until);
+        line.edits![0].expiresAt = new Date(until).toISOString();
+
+        expect((await source.thread(THREAD, scope, signal)).messages[0].text, 'while it lasts').toBe('one, for a while');
+
+        clock.advance(61_000);
+
+        expect((await source.thread(THREAD, scope, signal)).messages[0].text, 'once it has run out').toBe('one');
     });
 });

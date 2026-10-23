@@ -17,6 +17,9 @@ export interface ChatAction
 export interface LineHandlers
 {
     onReply?: () => void;
+
+    /** Handed only for a line the reader may still edit: their own words, within two days. */
+    onEdit?: () => void;
     onForward?: () => void;
     onDelete?: () => void;
     onPerson?: () => void;
@@ -31,6 +34,11 @@ export function messageActions(say: (key: MessageKey) => string, message: Messag
     if (handlers.onReply !== undefined)
     {
         list.push({ id: 'reply', icon: 'reply', label: say('chat.reply'), run: handlers.onReply });
+    }
+
+    if (mine && handlers.onEdit !== undefined)
+    {
+        list.push({ id: 'edit', icon: 'edit', label: say('chat.edit'), run: handlers.onEdit });
     }
 
     list.push({ id: 'copy', icon: 'copy', label: say('chat.copy'), run: () => void copyText(message.text, 'chat.copied', { dedupe: 'chat-copy' }) });

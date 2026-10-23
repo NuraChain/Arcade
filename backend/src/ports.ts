@@ -437,7 +437,7 @@ export interface ChatPort
      */
     send(me: string, sessionId: string, conversationId: string, input: {
         id: string;
-        kind: 'text' | 'reaction';
+        kind: 'text' | 'reaction' | 'edit';
         target?: string;
         epoch: number;
         seq: number;

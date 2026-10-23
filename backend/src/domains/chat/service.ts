@@ -1,6 +1,7 @@
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '@azerothjs/http';
-import { IsNull, type DataSource } from 'typeorm';
+import { In, IsNull, type DataSource } from 'typeorm';
 
+import { EDIT_HOURS } from './edits.ts';
 import type { Franking } from './franking.ts';
 import { THREAD_PAGE } from './pages.ts';
 
@@ -51,6 +52,19 @@ export interface ConversationRow
     /** When the room last moved, in microseconds since 1970, and 0 for a room nothing was said in. */
     last_key: string;
 
+    /** The newest edit of the last line by whoever wrote it, envelope and all, or nulls for none. */
+    edit_id: string | null;
+    edit_body: string | null;
+    edit_at: Date | null;
+    edit_epoch: number | null;
+    edit_seq: string | null;
+    edit_iv: string | null;
+    edit_sender_device_id: string | null;
+    edit_signature: string | null;
+    edit_client_at: Date | null;
+    edit_commitment: string | null;
+    edit_expires_at: Date | null;
+
     /** How long a message in this room lasts, in seconds. Null is off. */
     expire_after: number | null;
     quiet: boolean;
@@ -91,7 +105,7 @@ export interface MessageRow
 export interface SealedInput
 {
     id: string;
-    kind: 'text' | 'reaction';
+    kind: 'text' | 'reaction' | 'edit';
     target?: string;
     epoch: number;
     seq: number;
@@ -310,7 +324,7 @@ export function createChatService(db: DataSource, social: SocialService, frankin
                           where x.conversation_id = c.id
                             and x.created_at > m.last_read_at
                             and (x.expires_at is null or x.expires_at > now())
-                            and x.kind not in ('reaction', 'deleted')
+                            and x.kind not in ('reaction', 'edit', 'deleted')
                             and (x.sender_id is null or x.sender_id <> $1))             as unread,
                         last.id                                                          as last_id,
                         last.kind                                                        as last_kind,
@@ -331,7 +345,18 @@ export function createChatService(db: DataSource, social: SocialService, frankin
                         (last.sender_account_id = $1
                          and last.created_at <= (select max(o.last_read_at) from conversation_members o
                                                   where o.conversation_id = c.id and o.user_id <> $1)) as last_seen,
-                        ${ keyOf(ACTIVITY) }                                             as last_key
+                        ${ keyOf(ACTIVITY) }                                             as last_key,
+                        edit.id                                                          as edit_id,
+                        edit.body                                                        as edit_body,
+                        edit.created_at                                                  as edit_at,
+                        edit.epoch                                                       as edit_epoch,
+                        edit.seq                                                         as edit_seq,
+                        edit.iv                                                          as edit_iv,
+                        edit.sender_device_id                                            as edit_sender_device_id,
+                        edit.signature                                                   as edit_signature,
+                        edit.client_at                                                   as edit_client_at,
+                        edit.commitment                                                  as edit_commitment,
+                        edit.expires_at                                                  as edit_expires_at
                  from conversation_members m
                  join conversations c on c.id = m.conversation_id
                  left join lateral (
@@ -349,10 +374,23 @@ export function createChatService(db: DataSource, social: SocialService, frankin
                        -- preview of a message that has run out and the thread does not, which is
                        -- the one place a disappearing message would still be visible.
                        and (x.expires_at is null or x.expires_at > now())
-                       and x.kind not in ('reaction', 'deleted')
+                       and x.kind not in ('reaction', 'edit', 'deleted')
                      order by x.created_at desc, x.id desc
                      limit 1
                  ) last on true
+                 left join lateral (
+                     -- What the last line says now, when whoever wrote it has changed it. An edit
+                     -- never moves the room up the list: the activity above is the line's own time.
+                     select e.id, e.body, e.created_at, e.epoch, e.seq, e.iv, e.sender_device_id,
+                            e.signature, e.client_at, e.commitment, e.expires_at
+                     from messages e
+                     where e.target_id = last.id
+                       and e.kind = 'edit'
+                       and e.sender_id = last.sender_account_id
+                       and (e.expires_at is null or e.expires_at > now())
+                     order by e.created_at desc, e.id desc
+                     limit 1
+                 ) edit on true
                  where m.user_id = $1
                    and ($2::uuid is null
                         or (not m.pinned and (${ ACTIVITY }, c.id) < (${ instantOf('$3') }, $2::uuid)))
@@ -394,7 +432,7 @@ export function createChatService(db: DataSource, social: SocialService, frankin
          * other end while somebody scrolls up, and an OFFSET page silently repeats or skips a
          * message every time one arrives. The cursor is the last row of the previous page.
          */
-        async messages(me: string, conversationId: string, cursor: string | null | undefined, size: number = PAGE): Promise<{ messages: MessageRow[]; hasMore: boolean; reactions: MessageRow[]; cursor?: string }>
+        async messages(me: string, conversationId: string, cursor: string | null | undefined, size: number = PAGE): Promise<{ messages: MessageRow[]; hasMore: boolean; reactions: MessageRow[]; edits: MessageRow[]; cursor?: string }>
         {
             await mustBeMember(me, conversationId);
 
@@ -406,7 +444,7 @@ export function createChatService(db: DataSource, social: SocialService, frankin
                 .addSelect(keyOf('x.created_at'), 'at_key')
                 .addSelect(`(x.sender_id = :me and x.created_at <= (select max(o.last_read_at) from conversation_members o where o.conversation_id = x.conversation_id and o.user_id <> :me))`, 'seen')
                 .where('x.conversation_id = :conversationId', { conversationId, me })
-                .andWhere(`x.kind <> 'reaction'`)
+                .andWhere(`x.kind not in ('reaction', 'edit')`)
                 .andWhere('(x.expires_at is null or x.expires_at > now())');
 
             if (after !== null)
@@ -431,7 +469,20 @@ export function createChatService(db: DataSource, social: SocialService, frankin
                 .addOrderBy('x.id', 'ASC')
                 .getRawMany<MessageRow>();
 
-            return { messages: shown, hasMore, reactions, ...cursorOf(page, size) };
+            // The newest edit of each line, and only from whoever wrote the line: every reader
+            // checks that again from the signatures, and a line edited fifty times is one row.
+            const edits = texts.length === 0 ? [] : await envelope()
+                .distinctOn(['x.target_id'])
+                .where('x.target_id in (:...texts)', { texts })
+                .andWhere('x.kind = :kind', { kind: 'edit' })
+                .andWhere('x.sender_id = (select t.sender_id from messages t where t.id = x.target_id)')
+                .andWhere('(x.expires_at is null or x.expires_at > now())')
+                .orderBy('x.target_id', 'ASC')
+                .addOrderBy('x.created_at', 'DESC')
+                .addOrderBy('x.id', 'DESC')
+                .getRawMany<MessageRow>();
+
+            return { messages: shown, hasMore, reactions, edits, ...cursorOf(page, size) };
         },
 
         /**
@@ -497,7 +548,7 @@ export function createChatService(db: DataSource, social: SocialService, frankin
 
             if (input.kind === 'text' && input.target !== undefined)
             {
-                throw new BadRequestError('A message is not about another message; a reaction is.');
+                throw new BadRequestError('A message is not about another message; a reaction or an edit is.');
             }
 
             if (input.kind === 'reaction')
@@ -515,6 +566,34 @@ export function createChatService(db: DataSource, social: SocialService, frankin
                 if (!found)
                 {
                     throw new NotFoundError('There is no such message here to react to.');
+                }
+            }
+
+            // An edit changes words its own sender wrote here, for two days after they were stored,
+            // and lasts exactly as long as the line it changes: longer would keep its words after
+            // the line was gone, shorter would bring the old words back when it ran out.
+            let edited: { expires_at: Date | null } | undefined;
+
+            if (input.kind === 'edit')
+            {
+                const target = input.target ?? '';
+
+                edited = UUID.test(target)
+                    ? await db.getRepository(Message)
+                        .createQueryBuilder('t')
+                        .select('t.expires_at', 'expires_at')
+                        .where('t.id = :target', { target })
+                        .andWhere('t.conversation_id = :conversationId', { conversationId })
+                        .andWhere('t.kind = :kind', { kind: 'text' })
+                        .andWhere('t.sender_id = :me', { me })
+                        .andWhere('t.created_at > now() - make_interval(hours => :hours)', { hours: EDIT_HOURS })
+                        .andWhere('(t.expires_at is null or t.expires_at > now())')
+                        .getRawOne<{ expires_at: Date | null }>()
+                    : undefined;
+
+                if (edited === undefined)
+                {
+                    throw new NotFoundError('There is no line of yours here to edit.');
                 }
             }
 
@@ -548,21 +627,32 @@ export function createChatService(db: DataSource, social: SocialService, frankin
             // Without this, expiry is per-sender in practice whatever the design says - and somebody
             // sets sixty seconds on their own messages in a room with expiry off, so their words are
             // gone before anybody can report them and the frank goes with the row.
-            const room = await db.getRepository(Conversation).findOne({
-                select: { expireAfter: true },
-                where: { id: conversationId }
-            });
-
-            const agreed = room?.expireAfter ?? null;
             const wanted = expiresAt === null ? null : expiresAt.getTime();
 
-            const matchesRoom = agreed === null
-                ? wanted === null
-                : wanted !== null && Math.abs(wanted - (clientAt.getTime() + agreed * 1000)) <= EXPIRY_SLACK_MS;
-
-            if (!matchesRoom)
+            if (edited !== undefined)
             {
-                throw new ForbiddenError('That is not how long a message in this conversation lasts.');
+                if (wanted !== (edited.expires_at === null ? null : edited.expires_at.getTime()))
+                {
+                    throw new ForbiddenError('An edit lasts exactly as long as the line it changes.');
+                }
+            }
+            else
+            {
+                const room = await db.getRepository(Conversation).findOne({
+                    select: { expireAfter: true },
+                    where: { id: conversationId }
+                });
+
+                const agreed = room?.expireAfter ?? null;
+
+                const matchesRoom = agreed === null
+                    ? wanted === null
+                    : wanted !== null && Math.abs(wanted - (clientAt.getTime() + agreed * 1000)) <= EXPIRY_SLACK_MS;
+
+                if (!matchesRoom)
+                {
+                    throw new ForbiddenError('That is not how long a message in this conversation lasts.');
+                }
             }
 
             const known = await db.query(
@@ -632,7 +722,7 @@ export function createChatService(db: DataSource, social: SocialService, frankin
                         commitment: input.commitment,
                         frank,
                         expiresAt,
-                        targetId: input.kind === 'reaction' ? input.target ?? null : null
+                        targetId: input.kind === 'text' ? null : input.target ?? null
                     })
                     .returning('*')
                     .execute();
@@ -695,7 +785,7 @@ export function createChatService(db: DataSource, social: SocialService, frankin
                     return 'withdrawn';
                 }
 
-                await messages.delete({ targetId: messageId, kind: 'reaction' });
+                await messages.delete({ targetId: messageId, kind: In(['reaction', 'edit']) });
                 await messages.update({ id: messageId }, {
                     kind: 'deleted',
                     body: null,
@@ -750,7 +840,7 @@ export function createChatService(db: DataSource, social: SocialService, frankin
                         x.commitment, x.frank, x.expires_at
                  from messages x
                  left join users su on su.id = x.sender_id
-                 where x.conversation_id = $1 and x.id = $2 and x.kind = 'text'
+                 where x.conversation_id = $1 and x.id = $2 and x.kind in ('text', 'edit')
                    and (x.expires_at is null or x.expires_at > now())`,
                 [conversationId, messageId]
             );

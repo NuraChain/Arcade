@@ -1007,7 +1007,7 @@ interface FakeMint
 interface FakeSend
 {
     id: string;
-    kind: 'text' | 'reaction';
+    kind: 'text' | 'reaction' | 'edit';
     target?: string;
     epoch: number;
     seq: number;
@@ -2040,6 +2040,25 @@ export const client =
                     throw new ApiError(404, 'not-found', 'There is no such message here to react to.', undefined);
                 }
                 target.reactions = [...(target.reactions ?? []), { ...message, target: target.id } as NonNullable<ChatMessage['reactions']>[number]];
+                return message;
+            }
+
+            // An edit is about a line of the sender's own words in this room, and the newest one is
+            // what the line is handed with, as the real server hands it.
+            if (input.kind === 'edit')
+            {
+                const target = server.messages.find((one) => one.id === input.target && one.conversationId === params.id && one.kind === 'text' && one.from === server.me);
+                if (target === undefined)
+                {
+                    throw new ApiError(404, 'not-found', 'There is no line of yours here to edit.', undefined);
+                }
+                target.edits = [{ ...message, target: target.id } as NonNullable<ChatMessage['edits']>[number]];
+
+                const row = server.conversations.find((one) => one.id === params.id);
+                if (row?.last?.id === target.id)
+                {
+                    row.last = { ...row.last, edits: target.edits };
+                }
                 return message;
             }
 

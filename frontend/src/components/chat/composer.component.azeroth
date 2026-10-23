@@ -10,10 +10,17 @@ export default component Composer(props: {
     value: string;
     disabled?: boolean;
     reply?: { name: string; text: string } | null;
+
+    /** What the line being edited says now, while the field holds its new words. */
+    editing?: string | null;
     placeholder?: string;
     maxlength?: number;
     compact?: boolean;
     onCancelReply?: () => void;
+    onCancelEdit?: () => void;
+
+    /** Up in an empty field: the reader's last line is edited, as a desktop messenger does it. */
+    onUp?: () => void;
     onInput: (value: string) => void;
     onSend: () => void;
     onGame?: () => void;
@@ -27,7 +34,9 @@ export default component Composer(props: {
 
     let bar: HTMLElement | null = null;
 
-    derived replying = props.reply !== undefined && props.reply !== null && props.disabled !== true;
+    derived editing = props.editing !== undefined && props.editing !== null && props.disabled !== true;
+
+    derived replying = !editing && props.reply !== undefined && props.reply !== null && props.disabled !== true;
 
     derived empty = props.value.trim() === '';
 
@@ -75,8 +84,16 @@ export default component Composer(props: {
         props.onSend();
     };
 
-    const dismiss = (event: KeyboardEvent) =>
+    const keys = (event: KeyboardEvent) =>
     {
+        if (event.key === 'ArrowUp' && !editing && props.onUp !== undefined && props.value === '' && event.target instanceof HTMLTextAreaElement
+            && !event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey)
+        {
+            event.preventDefault();
+            props.onUp();
+            return;
+        }
+
         if (event.key !== 'Escape')
         {
             return;
@@ -85,6 +102,13 @@ export default component Composer(props: {
         if (docked)
         {
             docked = false;
+            event.stopPropagation();
+            return;
+        }
+
+        if (editing)
+        {
+            props.onCancelEdit?.();
             event.stopPropagation();
             return;
         }
@@ -98,7 +122,7 @@ export default component Composer(props: {
 
     <div
         class={ () => props.compact === true ? '' : 'safe-b border-t border-line bg-void/95 backdrop-blur-md' }
-        onKeyDown={ dismiss }
+        onKeyDown={ keys }
     >
         <div class={ () => props.compact === true ? 'flex flex-col gap-2' : 'flex w-full flex-col gap-2 px-3 py-2.5 sm:px-5' }>
             <Show when={ docked && props.disabled !== true }>
@@ -112,6 +136,19 @@ export default component Composer(props: {
                     props.disabled === true ? 'border-line opacity-60' : 'border-line-strong focus-within:border-accent/70 focus-within:ring-3 focus-within:ring-accent/15'
                 ].join(' ') }
             >
+                <Show when={ editing }>
+                    { () =>
+                        <div class="flex items-center gap-2.5 border-b border-line bg-raised/40 py-1.5 ps-3 pe-1.5" data-editing>
+                            <Icon name="edit" size={ 16 } class="shrink-0 text-accent" />
+                            <span class="flex min-w-0 flex-1 flex-col border-s-2 border-accent ps-2.5">
+                                <span class="truncate text-ui-xs font-semibold text-accent">{ locale.t('chat.editing') }</span>
+                                <span class="truncate text-ui-xs text-muted" dir="auto">{ props.editing ?? '' }</span>
+                            </span>
+                            <IconButton icon="close" label={ locale.t('chat.editCancel') } variant="ghost" size="sm" class="rounded-full!" onClick={ () => props.onCancelEdit?.() } />
+                        </div>
+                    }
+                </Show>
+
                 <Show when={ replying }>
                     { () =>
                         <div class="flex items-center gap-2.5 border-b border-line bg-raised/40 py-1.5 ps-3 pe-1.5">
@@ -151,7 +188,7 @@ export default component Composer(props: {
                         placeholder={ props.placeholder ?? locale.t('chat.composer') }
                         label={ props.placeholder ?? locale.t('chat.composer') }
                         disabled={ props.disabled === true }
-                        enterkeyhint="send"
+                        enterkeyhint={ editing ? 'done' : 'send' }
                         maxlength={ props.maxlength ?? 500 }
                         class={ [ 'min-w-0 flex-1 border-0! bg-transparent! py-0! opacity-100!', props.onGame === undefined ? 'ps-3!' : 'ps-1!', 'pe-1!' ].join(' ') }
                         onEnter={ send }
@@ -166,10 +203,10 @@ export default component Composer(props: {
                         onClick={ emoji }
                     />
                     <IconButton
-                        icon="send"
-                        label={ locale.t('chat.send') }
+                        icon={ editing ? 'selected' : 'send' }
+                        label={ locale.t(editing ? 'chat.editSave' : 'chat.send') }
                         variant={ empty ? 'ghost' : 'primary' }
-                        flip
+                        flip={ !editing }
                         class={ empty ? 'rounded-full! text-faint' : 'rounded-full!' }
                         disabled={ props.disabled === true || empty }
                         onClick={ send }

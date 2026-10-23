@@ -9,7 +9,8 @@ import { manualClock } from '../src/lib/clock.ts';
 import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
 import '../src/locales/app-catalogue.ts';
 import { useCatalogue } from '../src/stores/catalogue.store.ts';
-import { useChat } from '../src/stores/chat.store.ts';
+import { createApiSource } from '../src/services/chat.source.ts';
+import { setChatSource, useChat } from '../src/stores/chat.store.ts';
 import { useDevice } from '../src/stores/device.store.ts';
 import { useGroups } from '../src/stores/groups.store.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
@@ -978,7 +979,7 @@ describe('a right click, on a line and on a conversation', () =>
 
         await vi.waitFor(() => expect(item('delete')).not.toBeNull(), { timeout: 4000 });
 
-        expect(offered()).toEqual(['reply', 'copy', 'forward', 'delete']);
+        expect(offered()).toEqual(['reply', 'edit', 'copy', 'forward', 'delete']);
 
         fire(item('delete')!, 'click');
 
@@ -1035,5 +1036,165 @@ describe('a right click, on a line and on a conversation', () =>
         await settle();
 
         expect(menu()).toBeNull();
+    });
+});
+
+describe('a line the reader edits from the page', () =>
+{
+    const mineIn = () =>
+    {
+        const thread = server.conversations.find((row) => row.kind === 'direct' && server.messages.some((one) => one.conversationId === row.id && one.kind === 'text' && one.from === 'alex'))!;
+        const line = server.messages.filter((one) => one.conversationId === thread.id && one.kind === 'text' && one.from === 'alex').at(-1)!;
+
+        return { thread, line };
+    };
+
+    const field = (container: HTMLElement) => container.querySelector<HTMLTextAreaElement>('#chat-thread textarea')!;
+
+    const key = (target: Element, name: string) =>
+    {
+        const event = new KeyboardEvent('keydown', { key: name, bubbles: true, cancelable: true });
+
+        target.dispatchEvent(event);
+        return event;
+    };
+
+    const bar = (container: HTMLElement) => container.querySelector('#chat-thread [data-editing]');
+
+    const button = (container: HTMLElement, name: string) => container.querySelector<HTMLButtonElement>(`#chat-thread button[aria-label="${ name }"]`);
+
+    afterEach(() =>
+    {
+        useOverlay().reset();
+    });
+
+    it('edits the reader’s last line at Up in an empty composer, saves it, and the line says it was edited', async () =>
+    {
+        const { thread, line } = mineIn();
+        const container = opened(thread.id, 'sidebar');
+        const said = () => container.querySelector(`[data-message="${ line.id }"]`);
+
+        await vi.waitFor(() => expect(field(container)?.disabled).toBe(false), { timeout: 4000 });
+        await vi.waitFor(() => expect(said()).not.toBeNull(), { timeout: 4000 });
+
+        const words = said()!.querySelector('.bubble')!.textContent!;
+
+        expect(key(field(container), 'ArrowUp').defaultPrevented, 'Up is taken').toBe(true);
+
+        await vi.waitFor(() => expect(bar(container)).not.toBeNull(), { timeout: 4000 });
+
+        expect(bar(container)?.textContent).toContain(useLocale().t('chat.editing'));
+        expect(useChat().editing(thread.id)?.message.id).toBe(line.id);
+        await vi.waitFor(() => expect(words, 'the field holds the line’s words').toContain(field(container).value), { timeout: 4000 });
+
+        useChat().editText(thread.id, 'words changed from the page');
+        await settle();
+
+        expect(button(container, useLocale().t('chat.send')), 'Send has become Save').toBeNull();
+        fire(button(container, useLocale().t('chat.editSave'))!, 'click');
+
+        await vi.waitFor(() => expect(said()?.querySelector('.bubble')?.textContent).toContain('words changed from the page'), { timeout: 4000 });
+        await vi.waitFor(() => expect(said()?.querySelector('time')?.textContent).toContain(useLocale().t('chat.edited')), { timeout: 4000 });
+
+        expect(bar(container), 'editing is over').toBeNull();
+        await vi.waitFor(() => expect(server.messages.find((one) => one.id === line.id)?.edits, 'the server has the edit').toHaveLength(1), { timeout: 4000 });
+        await vi.waitFor(() => expect(said()?.querySelector('.bubble')?.textContent, 'and the line, read again, says it').toContain('words changed from the page'), { timeout: 4000 });
+    });
+
+    it('takes no Up in a composer with words in it, and leaves editing at Escape with the draft where it was', async () =>
+    {
+        const { thread, line } = mineIn();
+        const container = opened(thread.id, 'sidebar');
+
+        await vi.waitFor(() => expect(field(container)?.disabled).toBe(false), { timeout: 4000 });
+
+        useChat().setDraft(thread.id, 'half a thought');
+        await settle();
+
+        expect(key(field(container), 'ArrowUp').defaultPrevented, 'a field with words keeps its Up').toBe(false);
+        expect(useChat().editing(thread.id)).toBeNull();
+
+        useChat().beginEdit(thread.id, useChat().messages().find((one) => one.id === line.id)!);
+        await settle();
+
+        expect(bar(container)).not.toBeNull();
+
+        key(field(container), 'Escape');
+        await settle();
+
+        expect(bar(container)).toBeNull();
+        expect(useChat().editing(thread.id)).toBeNull();
+        expect(field(container).value, 'the draft is back in the field').toBe('half a thought');
+    });
+
+    it('offers Edit in a line of the reader’s own menu, and not in anybody else’s', async () =>
+    {
+        const { thread, line } = mineIn();
+        const container = opened(thread.id, 'sidebar');
+        const menuItem = (id: string) => document.querySelector<HTMLButtonElement>(`[role="menu"] [data-item="${ id }"]`);
+        const right = (target: Element) => target.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 300, clientY: 200 }));
+
+        await vi.waitFor(() => expect(container.querySelector(`[data-message="${ line.id }"] .bubble`)).not.toBeNull(), { timeout: 4000 });
+
+        right(container.querySelector(`[data-message="${ line.id }"] .bubble`)!);
+        await vi.waitFor(() => expect(menuItem('edit')).not.toBeNull(), { timeout: 4000 });
+
+        fire(menuItem('edit')!, 'click');
+
+        await vi.waitFor(() => expect(bar(container)).not.toBeNull(), { timeout: 4000 });
+
+        const theirs = server.messages.filter((one) => one.conversationId === thread.id && one.kind === 'text' && one.from !== 'alex').at(-1);
+
+        if (theirs !== undefined)
+        {
+            right(container.querySelector(`[data-message="${ theirs.id }"] .bubble`)!);
+            await vi.waitFor(() => expect(menuItem('reply')).not.toBeNull(), { timeout: 4000 });
+
+            expect(menuItem('edit'), 'nobody edits somebody else’s words').toBeNull();
+        }
+    });
+});
+
+describe('a report of a line its author edited', () =>
+{
+    afterEach(() =>
+    {
+        setChatSource(null);
+        useOverlay().reset();
+    });
+
+    it('discloses the edit that gave the line its words, not the words it was first sent with', async () =>
+    {
+        const thread = server.conversations.find((row) => row.kind === 'direct' && server.messages.some((one) => one.conversationId === row.id && one.kind === 'text' && one.from !== 'alex'))!;
+        const theirs = server.messages.filter((one) => one.conversationId === thread.id && one.kind === 'text' && one.from !== 'alex').at(-1)!;
+        const real = createApiSource();
+        const edited = { id: 'e-reported', at: 1_700_000_500_000, plain: '{"edit":"said differently","on":"x"}', frankingKey: 'the-edit-key' };
+
+        setChatSource({
+            ...real,
+            thread: async (...args: Parameters<typeof real.thread>) =>
+            {
+                const page = await real.thread(...args);
+
+                return { ...page, messages: page.messages.map((one) => (one.id === theirs.id ? { ...one, text: 'said differently', edited } : one)) };
+            }
+        });
+
+        const container = opened(thread.id, 'sidebar');
+        const bubble = () => container.querySelector(`[data-message="${ theirs.id }"] .bubble`);
+        const item = (id: string) => document.querySelector<HTMLButtonElement>(`[role="menu"] [data-item="${ id }"]`);
+
+        await vi.waitFor(() => expect(bubble()?.textContent).toContain('said differently'), { timeout: 4000 });
+
+        bubble()!.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 300, clientY: 200 }));
+        await vi.waitFor(() => expect(item('person')).not.toBeNull(), { timeout: 4000 });
+        fire(item('person')!, 'click');
+
+        await vi.waitFor(() => expect(useOverlay().items()).toHaveLength(1), { timeout: 4000 });
+
+        expect(useOverlay().items()[0].props).toMatchObject({
+            personId: theirs.from,
+            disclose: { conversationId: thread.id, messageId: 'e-reported', text: edited.plain, frankingKey: 'the-edit-key' }
+        });
     });
 });

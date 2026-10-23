@@ -84,6 +84,9 @@ export default component MessageBubble(props: {
 
     derived time = locale.date(props.message.at, { hour: 'numeric', minute: '2-digit' });
 
+    /** The time, and that whoever wrote the line has changed it since. */
+    derived stamp = props.message.edited === undefined ? time : `${ locale.t('chat.edited') } ${ time }`;
+
     derived typed = props.message.kind === 'text';
 
     derived noted = props.message.kind === 'system';
@@ -438,13 +441,13 @@ export default component MessageBubble(props: {
                                         </button>
                                     }
                                 </Show>
-                                <RichText text={ said } mine={ mine } reserve={ time } trail={ ticked } />
+                                <RichText text={ said } mine={ mine } reserve={ stamp } trail={ ticked } />
                                 <time
                                     class={ () => [ 'absolute bottom-1 end-3 text-ui-2xs leading-none', mine && !jumbo ? 'text-accent-ink/70' : 'text-faint' ].join(' ') }
                                     datetime={ new Date(props.message.at).toISOString() }
                                 >
                                     <span class="inline-flex items-center gap-0.5" dir={ locale.dir() }>
-                                        { time }
+                                        { stamp }
                                         <Show when={ ticked }>
                                             { () =>
                                                 <span class={ () => seen ? (jumbo ? 'flex text-accent' : 'flex text-accent-ink') : 'flex' } data-status={ status }>

@@ -240,8 +240,45 @@ export default component TableChat(props: {
 
     const reply = (message: Message) =>
     {
+        chat.cancelEdit(props.conversationId);
         chat.setReplyTo(props.conversationId, message);
         requestAnimationFrame(() => list?.closest('section')?.querySelector<HTMLTextAreaElement>('textarea')?.focus());
+    };
+
+    /** Puts a line of the reader's in the composer to be changed, the caret after its last word. */
+    const edit = (message: Message) =>
+    {
+        chat.beginEdit(props.conversationId, message);
+        requestAnimationFrame(() =>
+        {
+            const field = list?.closest('section')?.querySelector<HTMLTextAreaElement>('textarea');
+
+            field?.focus();
+            field?.setSelectionRange(field.value.length, field.value.length);
+        });
+    };
+
+    /** Up in an empty composer: the reader's newest line that may still be changed. */
+    const editLast = () =>
+    {
+        const last = [...messages].reverse().find((message) => chat.editable(message));
+
+        if (last !== undefined)
+        {
+            edit(last);
+        }
+    };
+
+    const save = () =>
+    {
+        void chat.saveEdit(props.conversationId).then(() => haptic('tick')).catch(warn);
+    };
+
+    derived editingNow = chat.editing(props.conversationId);
+
+    const setDraftHere = (value: string) =>
+    {
+        draft = value;
     };
 
     const react = (message: Message, emoji: string) =>
@@ -284,6 +321,7 @@ export default component TableChat(props: {
     /** What can be done with a line at the table, for its sheet and its menu alike. */
     const handlersOf = (message: Message): LineHandlers => ({
         ...(quiet ? {} : { onReply: () => reply(message) }),
+        ...(quiet || !chat.editable(message) ? {} : { onEdit: () => edit(message) }),
         onDelete: () => void remove(message)
     });
 
@@ -481,14 +519,17 @@ export default component TableChat(props: {
                         </Show>
                         <Composer
                             compact
-                            value={ draft }
+                            value={ editingNow === null ? draft : editingNow.text }
                             disabled={ stop !== null }
                             placeholder={ locale.t('play.table.say') }
                             maxlength={ 240 }
                             reply={ replying === null ? null : { name: replying.from === lobby.me() ? locale.t('chat.yourself') : nameOf(replying.from), text: plainOf(replying.text, locale.t('chat.spoilerPreview')) } }
+                            editing={ editingNow?.message.text ?? null }
                             onCancelReply={ () => chat.setReplyTo(props.conversationId, null) }
-                            onInput={ (value) => draft = value }
-                            onSend={ send }
+                            onCancelEdit={ () => chat.cancelEdit(props.conversationId) }
+                            onUp={ editLast }
+                            onInput={ (value) => editingNow === null ? setDraftHere(value) : chat.editText(props.conversationId, value) }
+                            onSend={ () => (editingNow === null ? send() : save()) }
                         />
                     </div>
                 </div>

@@ -632,6 +632,7 @@ describe('chat store', () =>
             thread: () => Promise.reject(new Error('offline')),
             post: () => Promise.resolve(),
             react: () => Promise.resolve(),
+            edit: () => Promise.resolve(),
             remove: () => Promise.resolve(),
             openDirect: () => Promise.reject(new Error('offline')),
             archive: () => [],
@@ -656,6 +657,7 @@ describe('chat store', () =>
             thread: (id, scope, signal) => answering ? live.thread(id, scope, signal) : Promise.reject(new Error('offline')),
             post: (message) => live.post(message),
             react: (...args) => live.react(...args),
+            edit: (...args) => live.edit(...args),
             remove: (...args) => live.remove(...args),
             openDirect: (scope, personId, at) => live.openDirect(scope, personId, at),
             archive: (scope) => live.archive(scope),
@@ -719,6 +721,7 @@ describe('chat store', () =>
             },
             post: (message, expiresAt) => live.post(message, expiresAt),
             react: (...args) => live.react(...args),
+            edit: (...args) => live.edit(...args),
             remove: (...args) => live.remove(...args),
             openDirect: (scope, personId, at) => live.openDirect(scope, personId, at),
             archive: (scope) => live.archive(scope),
@@ -1542,5 +1545,144 @@ describe('a line on its way', () =>
         await chat.refresh();
 
         expect(there()).toBe(false);
+    });
+});
+
+describe('a line the reader edits', () =>
+{
+    const holding = () =>
+    {
+        let release: () => void = () => undefined;
+
+        server.holdChat = new Promise<void>((resolve) =>
+        {
+            release = resolve;
+        });
+
+        return () =>
+        {
+            server.holdChat = null;
+            release();
+        };
+    };
+
+    const mine = async (words: string) =>
+    {
+        const chat = useChat();
+
+        chat.openThread('c-reza');
+        await chat.refresh();
+        await chat.send('c-reza', words);
+        await chat.refresh();
+
+        return chat.messages().find((one) => one.text === words)!;
+    };
+
+    const shown = (id: string) => useChat().messages().find((one) => one.id === id);
+
+    it('says the new words at the press, and keeps them once the server has them', async () =>
+    {
+        const chat = useChat();
+        const line = await mine('first words');
+        const release = holding();
+
+        const editing = chat.edit(line, 'second words');
+
+        expect(shown(line.id)?.text, 'at the press').toBe('second words');
+        expect(shown(line.id)?.edited, 'and said to be edited').toBeDefined();
+
+        release();
+        await editing;
+
+        const held = server.messages.find((one) => one.id === line.id);
+
+        expect(held?.edits, 'the server holds one edit of it').toHaveLength(1);
+        expect(shown(line.id)?.text).toBe('second words');
+        expect(shown(line.id)?.edited?.id, 'the edit the server holds').toBe(held?.edits?.[0].id);
+        expect(chat.messages().filter((one) => one.text === 'second words'), 'one line, not a second').toHaveLength(1);
+    });
+
+    it('takes the new words back when the server refuses them', async () =>
+    {
+        const chat = useChat();
+        const line = await mine('stays as it was');
+
+        server.refuseSend = 'no';
+        await chat.edit(line, 'never said').catch(() => undefined);
+
+        expect(shown(line.id)?.text).toBe('stays as it was');
+        expect(shown(line.id)?.edited).toBeUndefined();
+    });
+
+    it('sends nothing for the words a line already has, or for none', async () =>
+    {
+        const chat = useChat();
+        const line = await mine('same words');
+        const sends = server.calls.filter((one) => one === 'chat.send').length;
+
+        await chat.edit(line, 'same words');
+        await chat.edit(line, '   ');
+
+        expect(server.calls.filter((one) => one === 'chat.send')).toHaveLength(sends);
+    });
+
+    it('offers to edit only the reader’s own words that the server has, for two days', async () =>
+    {
+        const chat = useChat();
+        const line = await mine('editable');
+
+        expect(chat.editable(line)).toBe(true);
+        expect(chat.editable({ ...line, from: 'reza.t' }), 'somebody else’s').toBe(false);
+        expect(chat.editable({ ...line, locked: 'no-key' }), 'a line this browser cannot open').toBe(false);
+        expect(chat.editable({ ...line, outgoing: 'sending' }), 'a line on its way').toBe(false);
+        expect(chat.editable({ ...line, forwarded: true }), 'somebody’s words forwarded').toBe(false);
+        expect(chat.editable({ ...line, kind: 'deleted' }), 'a deleted line').toBe(false);
+        expect(chat.editable({ ...line, at: clock.now() - 48 * 3_600_000 + 60_000 }), 'a minute short of two days').toBe(true);
+        expect(chat.editable({ ...line, at: clock.now() - 48 * 3_600_000 }), 'two days').toBe(false);
+    });
+
+    it('holds the words being edited apart from the draft, and saves them once something is written', async () =>
+    {
+        const chat = useChat();
+        const line = await mine('to be changed');
+
+        chat.setDraft('c-reza', 'a draft');
+        chat.setReplyTo('c-reza', line);
+        chat.beginEdit('c-reza', line);
+
+        expect(chat.editing('c-reza')).toEqual({ message: line, text: 'to be changed' });
+        expect(chat.replyTo('c-reza'), 'editing leaves the reply').toBeNull();
+
+        chat.editText('c-reza', '   ');
+        await chat.saveEdit('c-reza');
+
+        expect(chat.editing('c-reza'), 'nothing written is nothing saved').not.toBeNull();
+
+        chat.editText('c-reza', 'changed');
+        await chat.saveEdit('c-reza');
+
+        expect(chat.editing('c-reza')).toBeNull();
+        expect(chat.draft('c-reza'), 'the draft is where it was').toBe('a draft');
+        expect(shown(line.id)?.text).toBe('changed');
+
+        chat.beginEdit('c-reza', shown(line.id)!);
+        chat.cancelEdit('c-reza');
+
+        expect(chat.editing('c-reza')).toBeNull();
+        expect(server.messages.find((one) => one.id === line.id)?.edits, 'leaving sends nothing').toHaveLength(1);
+    });
+
+    it('forgets what was being edited, and what was being answered, when it is reset', async () =>
+    {
+        const chat = useChat();
+        const line = await mine('forgotten');
+
+        chat.setReplyTo('c-reza', line);
+        chat.beginEdit('c-reza', line);
+        chat.setReplyTo('c-reza', line);
+        chat.reset();
+
+        expect(chat.editing('c-reza')).toBeNull();
+        expect(chat.replyTo('c-reza')).toBeNull();
     });
 });

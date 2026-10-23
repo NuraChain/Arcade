@@ -2296,14 +2296,10 @@ export const lineParams = object({
 export const line = object({ key: string(), params: lineParams });
 
 /**
- * One message.
- *
- * `body` XOR `payload`, the same exclusive-or the database holds: words for what a person typed,
- * `{ key, params }` for the three kinds the server authors. `from` is a HANDLE, because that is
- * what the client keys people by and what survives being shown to somebody who has never seen
- * this account before.
+ * A sealed row about another row: a reaction, or an edit of the words of a line. Its target is in
+ * the clear, so that a page of history can be handed what is about its lines; what it says is not.
  */
-export const chatReaction = object({
+export const chatRelation = object({
     id: string(),
     conversationId: string(),
     kind: messageKind,
@@ -2322,8 +2318,16 @@ export const chatReaction = object({
     expiresAt: string().optional()
 });
 
-export type ChatReaction = Infer<typeof chatReaction>;
+export type ChatRelation = Infer<typeof chatRelation>;
 
+/**
+ * One message.
+ *
+ * `body` XOR `payload`, the same exclusive-or the database holds: words for what a person typed,
+ * `{ key, params }` for the three kinds the server authors. `from` is a HANDLE, because that is
+ * what the client keys people by and what survives being shown to somebody who has never seen
+ * this account before.
+ */
 export const chatMessage = object({
     id: string(),
     conversationId: string(),
@@ -2361,7 +2365,10 @@ export const chatMessage = object({
 
     /** When it stops existing, if it does. Absent on a message that lasts. */
     expiresAt: string().optional(),
-    reactions: array(chatReaction).optional(),
+    reactions: array(chatRelation).optional(),
+
+    /** The newest edit of the line by whoever wrote it. Every reader opens it and checks that again. */
+    edits: array(chatRelation, { max: 1 }).optional(),
 
     /**
      * The reader's own line, and somebody else in the room has read up to it: the newest read
@@ -2429,7 +2436,7 @@ export type MessagePage = Infer<typeof messagePage>;
  */
 export const sendInput = object({
     id: string(),
-    kind: enumOf(['text', 'reaction']),
+    kind: enumOf(['text', 'reaction', 'edit']),
     target: string().optional(),
     epoch: number(),
     seq: number(),

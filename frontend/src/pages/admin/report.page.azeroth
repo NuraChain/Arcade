@@ -16,7 +16,7 @@ import Skeleton from '../../components/ui/skeleton.component.azeroth';
 import type { GameId } from '../../data/games.ts';
 import Icon from '../../icons/icon.component.azeroth';
 import { attempt } from '../../lib/attempt.ts';
-import { decodeText } from '../../lib/body.ts';
+import { decodeDisclosed } from '../../lib/body.ts';
 import { createGuesses, type Guess } from '../../lib/guess.ts';
 import { runtime } from '../../lib/runtime.ts';
 import { CATEGORY_WORDS, handleParts, ROLE_IN, STATUS_TONES, STATUS_WORDS, whyStaffRefused } from '../../lib/staff-words.ts';
@@ -106,7 +106,7 @@ export default component ReportPage()
 
     derived filed = report === null ? '' : locale.t('admin.report.filed', { when: locale.relative(Date.parse(report.at)) });
 
-    derived decoded = report?.message === undefined ? null : decodeText(report.message);
+    derived decoded = report?.message === undefined ? null : decodeDisclosed(report.message);
 
     derived readable = decoded !== null;
 
@@ -115,6 +115,8 @@ export default component ReportPage()
     derived words = decoded?.text ?? '';
 
     derived forwarded = decoded?.fwd === true;
+
+    derived edited = decoded?.edited === true;
 
     derived unsaid = locale.t(unreadable ? 'admin.report.messageUnread' : 'admin.report.messageNone');
 
@@ -236,6 +238,9 @@ export default component ReportPage()
                                 <blockquote class="whitespace-pre-wrap break-words rounded-tile border-s-2 border-accent bg-sunk px-3 py-2 text-ui-md text-text" dir="auto" data-message>{ words }</blockquote>
                                 <span class="flex" hidden={ !forwarded } data-forwarded>
                                     <Badge text={ locale.t('admin.report.forwarded') } tone="neutral" />
+                                </span>
+                                <span class="flex" hidden={ !edited } data-edited>
+                                    <Badge text={ locale.t('admin.report.edited') } tone="neutral" />
                                 </span>
                             </Show>
                         </Panel>

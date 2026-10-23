@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { decodeReaction, decodeText, encodeReaction, encodeText, isEmoji } from '../src/lib/body.ts';
+import { decodeDisclosed, decodeEdit, decodeReaction, decodeText, encodeEdit, encodeReaction, encodeText, isEmoji } from '../src/lib/body.ts';
 import { parseInline, parseMarkdown, plainOf, safeHref } from '../src/lib/markdown.ts';
 
 describe('inline formatting, the way Discord reads it', () =>
@@ -198,6 +198,26 @@ describe('the sealed plaintext is a document', () =>
 
         expect(decodeReaction(sealed, 'm1')).toBe('👍');
         expect(decodeReaction(sealed, 'm2')).toBeNull();
+    });
+
+    it('reads an edit for the line it names and no other, and never one with no words', () =>
+    {
+        const sealed = encodeEdit({ edit: 'new words', on: 'm1' });
+
+        expect(decodeEdit(sealed, 'm1')).toBe('new words');
+        expect(decodeEdit(sealed, 'm2'), 'moved onto another line').toBeNull();
+        expect(decodeEdit(encodeEdit({ edit: '   ', on: 'm1' }), 'm1'), 'no words').toBeNull();
+        expect(decodeEdit(encodeText({ text: 'a line' }), 'm1'), 'a line is no edit').toBeNull();
+        expect(decodeEdit(encodeReaction({ react: '👍', on: 'm1' }), 'm1'), 'nor is a reaction').toBeNull();
+    });
+
+    it('reads a disclosed line as its words, or as the edit that gave it the words it had', () =>
+    {
+        expect(decodeDisclosed(encodeText({ text: 'hi', fwd: true }))).toEqual({ text: 'hi', fwd: true });
+        expect(decodeDisclosed(encodeEdit({ edit: 'changed', on: 'm1' }))).toEqual({ text: 'changed', edited: true });
+        expect(decodeDisclosed(encodeReaction({ react: '👍', on: 'm1' })), 'a reaction is no line').toBeNull();
+        expect(decodeDisclosed(JSON.stringify({ edit: 'x' })), 'an edit of nothing').toBeNull();
+        expect(decodeDisclosed('just words')).toBeNull();
     });
 
     it('takes exactly one emoji as a reaction, and never a sentence', () =>

@@ -114,6 +114,13 @@ export interface Message
     forwarded?: boolean;
     reactions?: Reaction[];
 
+    /**
+     * Whoever wrote the line has changed its words, and `text` is what it says now. The edit is a
+     * sealed row of its own, so a report of the line as it reads discloses the edit: its id, the
+     * document it sealed and the key that commits to it. `at` is when its writer says they made it.
+     */
+    edited?: { id: string; at: number; plain: string; frankingKey: string };
+
     line?: MessageLine;
     at: number;
 

@@ -508,9 +508,41 @@ export default component ChatPage()
 
     const reply = (message: Message) =>
     {
+        chat.cancelEdit(id);
         chat.setReplyTo(id, message);
         requestAnimationFrame(() => document.querySelector<HTMLTextAreaElement>('#chat-thread textarea')?.focus());
     };
+
+    /** Puts a line of the reader's in the composer to be changed, the caret after its last word. */
+    const edit = (message: Message) =>
+    {
+        chat.beginEdit(id, message);
+        requestAnimationFrame(() =>
+        {
+            const field = document.querySelector<HTMLTextAreaElement>('#chat-thread textarea');
+
+            field?.focus();
+            field?.setSelectionRange(field.value.length, field.value.length);
+        });
+    };
+
+    /** Up in an empty composer: the reader's newest line that may still be changed. */
+    const editLast = () =>
+    {
+        const last = [...messages].reverse().find((message) => chat.editable(message));
+
+        if (last !== undefined)
+        {
+            edit(last);
+        }
+    };
+
+    const save = () =>
+    {
+        void chat.saveEdit(id).then(() => haptic('tick')).catch(warn);
+    };
+
+    derived editingNow = chat.editing(id);
 
     const react = (message: Message, emoji: string) =>
     {
@@ -566,20 +598,30 @@ export default component ChatPage()
     /** What can be done with a line here, for its sheet and its menu alike. */
     const handlersOf = (message: Message): LineHandlers => ({
         ...(quiet ? {} : { onReply: () => reply(message) }),
+        ...(quiet || !chat.editable(message) ? {} : { onEdit: () => edit(message) }),
         onForward: () => overlay.open(ForwardSheet, { message }, { label: locale.t('chat.forwardTitle') }),
         onDelete: () => void remove(message),
         onPerson: () => overlay.open(
             PersonActions,
             {
                 personId: message.from,
-                ...(message.frankingKey === undefined ? {} : {
-                    disclose: {
-                        conversationId: message.conversationId,
-                        messageId: message.id,
-                        text: message.plain ?? message.text,
-                        frankingKey: message.frankingKey
+                ...(message.edited !== undefined && message.edited.frankingKey !== ''
+                    ? {
+                        disclose: {
+                            conversationId: message.conversationId,
+                            messageId: message.edited.id,
+                            text: message.edited.plain,
+                            frankingKey: message.edited.frankingKey
+                        }
                     }
-                })
+                    : (message.frankingKey === undefined ? {} : {
+                        disclose: {
+                            conversationId: message.conversationId,
+                            messageId: message.id,
+                            text: message.plain ?? message.text,
+                            frankingKey: message.frankingKey
+                        }
+                    }))
             },
             { label: locale.t('actions.title') }
         )
@@ -841,12 +883,15 @@ export default component ChatPage()
                             <Show when={ !quiet }>
                                 { () =>
                                     <Composer
-                                        value={ chat.draft(id) }
+                                        value={ editingNow === null ? chat.draft(id) : editingNow.text }
                                         reply={ replying }
+                                        editing={ editingNow?.message.text ?? null }
                                         onCancelReply={ () => chat.setReplyTo(id, null) }
+                                        onCancelEdit={ () => chat.cancelEdit(id) }
+                                        onUp={ editLast }
                                         disabled={ stop !== null }
-                                        onInput={ (value) => chat.setDraft(id, value) }
-                                        onSend={ send }
+                                        onInput={ (value) => (editingNow === null ? chat.setDraft(id, value) : chat.editText(id, value)) }
+                                        onSend={ () => (editingNow === null ? send() : save()) }
                                         onGame={ startGame }
                                     />
                                 }

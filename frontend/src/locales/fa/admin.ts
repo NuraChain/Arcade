@@ -276,6 +276,7 @@ export const admin: Pick<Dictionary, keyof typeof reference> = {
     'admin.report.messageNone': 'هیچ پیامی همراه این گزارش نیومده.',
     'admin.report.messageUnread': 'پیامی که همراهش اومده خونده نشد.',
     'admin.report.forwarded': 'فوروارد شده',
+    'admin.report.edited': 'ویرایش‌شده: همون چیزی که موقع گزارش نوشته بود',
     'admin.report.together': 'بازی‌هایی که با هم کردن',
     'admin.report.togetherNone': 'این اواخر با هم بازی نکردن.',
     'admin.report.live': 'در حال بازی',

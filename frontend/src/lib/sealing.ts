@@ -366,7 +366,7 @@ async function verifiedSigner(conversationId: string, deviceId: string): Promise
 export interface SealedSend
 {
     id: string;
-    kind: 'text' | 'reaction';
+    kind: 'text' | 'reaction' | 'edit';
     epoch: number;
     seq: number;
     iv: string;
@@ -397,7 +397,7 @@ export async function sealForSend(
     text: string,
     at: number,
     expiresAt: number,
-    kind: 'text' | 'reaction' = 'text',
+    kind: 'text' | 'reaction' | 'edit' = 'text',
     chosen?: string
 ): Promise<SealedSend>
 {

@@ -729,6 +729,35 @@ describe('a right click on a line at a table', () =>
         right(bubble(mine.id)!);
         await vi.waitFor(() => expect(menu()).not.toBeNull(), { timeout: 4000 });
 
-        expect(offered(), 'a line of the reader’s').toEqual(['reply', 'copy', 'delete']);
+        expect(offered(), 'a line of the reader’s').toEqual(['reply', 'edit', 'copy', 'delete']);
+    });
+});
+
+describe('a line the reader edits at a table', () =>
+{
+    it('takes Edit from the line’s menu into the composer, and saves the new words to the line', async () =>
+    {
+        const room = server.conversations.find((row) => server.messages.some((one) => one.conversationId === row.id && one.kind === 'text' && one.from === 'alex'))!;
+        const mine = server.messages.filter((one) => one.conversationId === room.id && one.kind === 'text' && one.from === 'alex').at(-1)!;
+        const container = shown(room.id);
+        const bubble = () => container.querySelector(`[data-message="${ mine.id }"] .bubble`);
+        const item = (id: string) => document.querySelector<HTMLButtonElement>(`[role="menu"] [data-item="${ id }"]`);
+
+        await vi.waitFor(() => expect(bubble()).not.toBeNull(), { timeout: 4000 });
+
+        bubble()!.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 300, clientY: 200 }));
+        await vi.waitFor(() => expect(item('edit')).not.toBeNull(), { timeout: 4000 });
+        fire(item('edit')!, 'click');
+
+        await vi.waitFor(() => expect(container.querySelector('[data-editing]')).not.toBeNull(), { timeout: 4000 });
+
+        useChat().editText(room.id, 'changed at the table');
+        await settle();
+        fire(container.querySelector<HTMLButtonElement>(`button[aria-label="${ useLocale().t('chat.editSave') }"]`)!, 'click');
+
+        await vi.waitFor(() => expect(bubble()?.textContent).toContain('changed at the table'), { timeout: 4000 });
+        await vi.waitFor(() => expect(server.messages.find((one) => one.id === mine.id)?.edits).toHaveLength(1), { timeout: 4000 });
+
+        expect(container.querySelector('[data-editing]')).toBeNull();
     });
 });

@@ -55,7 +55,7 @@ import type {
     Account,
     ChatMessage,
     VoiceIce,
-    ChatReaction,
+    ChatRelation,
     ConversationDevices,
     ConversationSummary,
     Device,
@@ -311,9 +311,10 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
         return message;
     };
 
-    const asReactions = (rows: MessageRow[]) =>
+    /** Rows about other rows, by the row each is about. */
+    const asRelations = (rows: MessageRow[]) =>
     {
-        const on = new Map<string, ChatReaction[]>();
+        const on = new Map<string, ChatRelation[]>();
 
         for (const row of rows)
         {
@@ -324,7 +325,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                 continue;
             }
 
-            const reaction: ChatReaction = {
+            const relation: ChatRelation = {
                 id: row.id,
                 conversationId: row.conversation_id,
                 kind: row.kind,
@@ -343,7 +344,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                 ...(row.expires_at === null ? {} : { expiresAt: row.expires_at.toISOString() })
             };
 
-            on.set(row.target_id, [...(on.get(row.target_id) ?? []), reaction]);
+            on.set(row.target_id, [...(on.get(row.target_id) ?? []), relation]);
         }
 
         return on;
@@ -451,6 +452,32 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                 target_id: null,
                 seen: row.last_seen
             });
+
+            const edited = row.edit_id === null || row.edit_at === null ? undefined : asRelations([{
+                id: row.edit_id,
+                conversation_id: row.id,
+                kind: 'edit',
+                body: row.edit_body,
+                payload: null,
+                sender: row.last_from,
+                sender_account_id: row.last_sender_account_id,
+                created_at: row.edit_at,
+                epoch: row.edit_epoch,
+                seq: row.edit_seq,
+                iv: row.edit_iv,
+                sender_device_id: row.edit_sender_device_id,
+                signature: row.edit_signature,
+                client_at: row.edit_client_at,
+                commitment: row.edit_commitment,
+                frank: null,
+                expires_at: row.edit_expires_at,
+                target_id: row.last_id
+            }]).get(row.last_id);
+
+            if (edited !== undefined)
+            {
+                summary.last.edits = edited;
+            }
         }
         return summary;
     };
@@ -3386,13 +3413,19 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
             async messages(me, conversationId, cursor, limit)
             {
                 const page = await chat.messages(me, conversationId, cursor, threadSize(limit));
-                const reactions = asReactions(page.reactions);
+                const reactions = asRelations(page.reactions);
+                const edits = asRelations(page.edits);
                 return {
                     messages: page.messages.map((row) =>
                     {
-                        const message = asMessage(row);
                         const on = reactions.get(row.id);
-                        return on === undefined ? message : { ...message, reactions: on };
+                        const changed = edits.get(row.id);
+
+                        return {
+                            ...asMessage(row),
+                            ...(on === undefined ? {} : { reactions: on }),
+                            ...(changed === undefined ? {} : { edits: changed })
+                        };
                     }),
                     hasMore: page.hasMore,
                     ...(page.cursor === undefined ? {} : { cursor: page.cursor })
@@ -3405,7 +3438,9 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                     await chat.send(me, conversationId, await device.deviceOfSession(sessionId), input)
                 );
 
-                if (input.kind === 'reaction')
+                // A reaction or an edit changes a line already in the room: everybody there reads it
+                // again, and nobody is told anything new happened.
+                if (input.kind !== 'text')
                 {
                     live?.chatChanged(conversationId);
                     return message;

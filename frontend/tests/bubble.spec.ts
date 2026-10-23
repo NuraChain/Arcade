@@ -623,3 +623,49 @@ describe('a right click on a line, and the bar a pointer finds beside it', () =>
         expect([bar.style.left, bar.style.top], 'over the far end of a line too wide, found by the keyboard as well').toEqual(['580px', '-40px']);
     });
 });
+
+describe('a line its author edited', () =>
+{
+    const edited = { id: 'e-1', at: 1_700_000_100_000, plain: '{"edit":"changed words","on":"m-1"}', frankingKey: 'key' };
+
+    const reserveOf = (container: HTMLElement) => [...container.querySelectorAll('.invisible')].find((node) => node.getAttribute('aria-hidden') === 'true');
+
+    it('says so beside its time, and keeps room for the words so the last line never runs under them', () =>
+    {
+        const container = show(text('m-1', 'changed words', { edited }));
+
+        expect(container.querySelector('time')?.textContent).toContain(useLocale().t('chat.edited'));
+        expect(reserveOf(container)?.textContent).toContain(useLocale().t('chat.edited'));
+    });
+
+    it('says nothing of the sort on a line nobody changed', () =>
+    {
+        const container = show(text('m-1', 'as written'));
+
+        expect(container.querySelector('time')?.textContent).not.toContain(useLocale().t('chat.edited'));
+        expect(reserveOf(container)?.textContent).not.toContain(useLocale().t('chat.edited'));
+    });
+
+    it('says it in Persian', () =>
+    {
+        useLocale().setLocale('fa');
+
+        const container = show(text('m-1', 'عوض شد', { edited }));
+
+        expect(useLocale().t('chat.edited')).not.toBe('edited');
+        expect(container.querySelector('time')?.textContent).toContain(useLocale().t('chat.edited'));
+    });
+
+    it('takes the new words and the mark on the line it was, when the line is read again edited', async () =>
+    {
+        const first = text('m-1', 'as written');
+        const { container, read } = await held(first);
+        const row = container.querySelector('[data-message]');
+
+        await read({ ...first, text: 'changed words', edited });
+
+        expect(container.querySelector('.bubble')?.textContent).toContain('changed words');
+        expect(container.querySelector('time')?.textContent).toContain(useLocale().t('chat.edited'));
+        expect(container.querySelector('[data-message]'), 'the same line').toBe(row);
+    });
+});

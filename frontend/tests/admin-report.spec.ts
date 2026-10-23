@@ -186,6 +186,23 @@ describe('one report', () =>
         expect(said(third, '[data-history="none"]')).toBe('Nothing yet.');
     });
 
+    it('shows an edited line in the words it had when it was reported, and says it was edited', async () =>
+    {
+        const edited = reportFiled({ at: hoursAgo(3), by: 'sara.k', about: 'reza.t', message: '{"edit":"Changed to this","on":"m-1"}' });
+        const plain = reportFiled({ at: hoursAgo(2), by: 'sara.k', about: 'reza.t', message: '{"text":"Never changed"}' });
+
+        const first = await opened(edited);
+
+        expect(said(first, '[data-message]')).toBe('Changed to this');
+        expect(first.querySelector<HTMLElement>('[data-edited]')?.hidden).toBe(false);
+        expect(said(first, '[data-edited]')).toBe('Edited: the words it had when it was reported');
+        cleanup();
+
+        const second = await opened(plain);
+
+        expect(second.querySelector<HTMLElement>('[data-edited]')?.hidden, 'a line nobody changed').toBe(true);
+    });
+
     it('closes a report at the press: the status, the row and the count of waiting reports, said once the server has', async () =>
     {
         const id = reportFiled({ at: hoursAgo(3), by: 'sara.k', about: 'reza.t' });
