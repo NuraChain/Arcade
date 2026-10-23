@@ -155,16 +155,19 @@ function resigned(state: ChessState, next: ChessState, seat: number): Outcome
 }
 
 /**
- * The flag of the side to move falling, which only the sweep does. Before that side's first move it
+ * The flag of the side to move falling. The sweep lets it fall when the deadline passes, and the
+ * side that is waiting may claim it once the server's clock says the time has gone (`moment`), so a
+ * game does not stand at nought until the sweep comes round. Before the fallen side's first move it
  * is no result; after it, a loss on time, unless the other side has nothing that could ever mate.
  */
-function flagged(state: ChessState, next: ChessState, seat: number): Outcome
+function flagged(state: ChessState, next: ChessState, moment: Moment | undefined): Outcome
 {
-    if (seat !== turnSeat(state))
+    if (moment !== undefined && moment.left > 0)
     {
-        return refuse('not-your-turn');
+        return refuse('time-left');
     }
 
+    const seat = turnSeat(state);
     const events: ChessEvent[] = [{ e: 'flag', seat }];
 
     if (!state.moved[seat])
@@ -173,8 +176,9 @@ function flagged(state: ChessState, next: ChessState, seat: number): Outcome
     }
 
     const mates = canMate(state.position.board, colourOfSeat(state, 1 - seat));
+    const spent = next.clock === null ? next : { ...next, clock: { ...next.clock, left: next.clock.left.map((bank, at) => (at === seat ? 0 : bank)) } };
 
-    return { ok: true, state: ended(next, mates ? 1 - seat : null, mates ? 'flag' : 'flag-material', events), events };
+    return { ok: true, state: ended(spent, mates ? 1 - seat : null, mates ? 'flag' : 'flag-material', events), events };
 }
 
 export function apply(state: ChessState, action: ChessAction, moment?: Moment): Outcome
@@ -221,7 +225,7 @@ export function apply(state: ChessState, action: ChessAction, moment?: Moment): 
 
     if (action.kind === 'flag')
     {
-        return flagged(state, next, action.seat);
+        return flagged(state, next, moment);
     }
 
     const events: ChessEvent[] = [{ e: 'forfeit', seat: action.seat, reason: action.reason }];

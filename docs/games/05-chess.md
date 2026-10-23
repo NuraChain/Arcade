@@ -108,7 +108,7 @@ chessprogramming wiki's positions 3 to 6, and every count is the published one.
 | `offer` | either seat, any time | stands until answered or declined by a move; an offer standing from the other side makes it an acceptance; offered again only after moving (`draw-offered`) |
 | `accept`, `decline` | the seat an offer was made to | a draw by agreement, or the offer gone (`no-draw-offer` when none stands) |
 | `resign` | either seat | a loss once both sides have moved, otherwise an abort |
-| `flag` | the side to move, played only by the sweep | an abort before that side's first move; otherwise a loss on time, or a draw when the other side cannot mate |
+| `flag` | the sweep, at the deadline; or either seat once the server's clock says the side to move has no time left (`time-left` before then) | the side to move's flag falls: an abort before its first move; otherwise its clock reads nought and it loses on time, or draws when the other side cannot mate |
 | `forfeit` | the platform | a walkout: the other side wins |
 
 ### How a game ends
@@ -130,6 +130,14 @@ milliseconds on its side's bank leaves `left` plus the increment there, and a mo
 nothing left is refused `time-up`. `bankOf` is what the side to move has: the first-move window, its
 bank, or null when the game keeps no bank (over, or a day a move). With no `left` handed in (a
 replay, a spec) no time passes.
+
+The service arms each deadline from `bankOf`, so the sweep comes for the side to move as its own
+time runs out (`.claude/rules/games.md`, *A game played against a clock*). The sweep comes round
+every five seconds, and in a game of three minutes that is too long to look at a clock reading
+nought: the side that is waiting may claim the flag itself, and the claim is taken once the
+server's own clock, read off the locked row as `left`, says the time has gone. A claim made a
+moment early is refused `time-left` and can be made again; one the server takes is the same flag
+the sweep would have let fall.
 
 ### What each seat did
 

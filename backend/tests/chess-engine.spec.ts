@@ -202,13 +202,23 @@ describe('a resignation, and a flag', () =>
         expect(late.ok && late.state.over).toEqual({ winner: 0, reason: 'resign' });
     });
 
-    it('lets only the side to move flag, and only the sweep asks for it', () =>
+    it('lets the sweep flag the side to move, and the side waiting claim it once the clock says the time has gone', () =>
     {
-        const state = played(dealt(0), ['e2e4', 'e7e5']).state;
+        const state = played(dealt(0, { base: 180_000, increment: 2000 }), ['e2e4', 'e7e5']).state;
 
         expect(autoplay(state, 0)).toEqual({ kind: 'flag', seat: 0 });
         expect(autoplay(state, 1)).toBeNull();
-        expect(refusedFor(state, { kind: 'flag', seat: 1 })).toBe('not-your-turn');
+        expect(refusedFor(state, { kind: 'flag', seat: 1 }, { left: 1500 })).toBe('time-left');
+
+        const claimed = apply(state, { kind: 'flag', seat: 1 }, { left: -40 });
+
+        expect(claimed.ok && claimed.state.over).toEqual({ winner: 1, reason: 'flag' });
+        expect(claimed.ok && claimed.events).toContainEqual({ e: 'flag', seat: 0 });
+        expect(claimed.ok && claimed.state.clock?.left, 'the fallen side\'s clock does not read nought').toEqual([0, 180_000]);
+
+        const swept = apply(state, autoplay(state, 0)!);
+
+        expect(swept.ok && swept.state.over).toEqual({ winner: 1, reason: 'flag' });
     });
 
     it('aborts a game whose side to move never made its first move', () =>

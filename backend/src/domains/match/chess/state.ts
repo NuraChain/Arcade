@@ -94,7 +94,8 @@ export type ChessRefusal =
     | 'promotion-needed'
     | 'no-draw-offer'
     | 'draw-offered'
-    | 'time-up';
+    | 'time-up'
+    | 'time-left';
 
 export const colourOfSeat = (state: Pick<ChessState, 'white'>, seat: number): Colour => (seat === state.white ? 'w' : 'b');
 
