@@ -33,6 +33,7 @@ interface GameSeed
     partners: Partners;
     hasCube: boolean;
     hasBlinds: boolean;
+    clocks: string[];
 }
 
 /**
@@ -74,7 +75,8 @@ export const GAME_SEEDS: GameSeed[] = [
         stakes: 'none',
         partners: 'required',
         hasCube: false,
-        hasBlinds: false
+        hasBlinds: false,
+        clocks: []
     },
     {
         id: 'poker',
@@ -89,7 +91,8 @@ export const GAME_SEEDS: GameSeed[] = [
         stakes: 'play-money',
         partners: 'none',
         hasCube: false,
-        hasBlinds: true
+        hasBlinds: true,
+        clocks: []
     },
     {
         id: 'backgammon',
@@ -104,7 +107,8 @@ export const GAME_SEEDS: GameSeed[] = [
         stakes: 'none',
         partners: 'none',
         hasCube: true,
-        hasBlinds: false
+        hasBlinds: false,
+        clocks: []
     },
     {
         id: 'ludo',
@@ -119,7 +123,8 @@ export const GAME_SEEDS: GameSeed[] = [
         stakes: 'none',
         partners: 'optional',
         hasCube: false,
-        hasBlinds: false
+        hasBlinds: false,
+        clocks: []
     }
 ];
 
@@ -173,8 +178,8 @@ export async function seedReference(db: DataSource)
 
             await tx.query(
                 `insert into game_rules
-                    (game_id, seats, modes, targets, stakes, partners, has_cube, has_blinds)
-                 values ($1, $2, $3, $4, $5, $6, $7, $8)
+                    (game_id, seats, modes, targets, stakes, partners, has_cube, has_blinds, clocks)
+                 values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
                  on conflict (game_id) do update set
                     seats = excluded.seats,
                     modes = excluded.modes,
@@ -182,7 +187,8 @@ export async function seedReference(db: DataSource)
                     stakes = excluded.stakes,
                     partners = excluded.partners,
                     has_cube = excluded.has_cube,
-                    has_blinds = excluded.has_blinds`,
+                    has_blinds = excluded.has_blinds,
+                    clocks = excluded.clocks`,
                 [
                     game.id,
                     game.seats,
@@ -191,7 +197,8 @@ export async function seedReference(db: DataSource)
                     game.stakes,
                     game.partners,
                     game.hasCube,
-                    game.hasBlinds
+                    game.hasBlinds,
+                    game.clocks
                 ]
             );
         }

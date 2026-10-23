@@ -31,6 +31,8 @@ export type TablePrivacy = 'invite' | 'room' | 'friends' | 'public';
 export type TableStatus = 'open' | 'closed';
 
 @Check('tables_blinds_known', `blinds in ('low', 'mid', 'high')`)
+@Check('tables_clock_known', `clock is null or clock in ('3+2', '5+0', '10+0', '15+10', '30+0')`)
+@Check('tables_clock_live', `clock is null or mode = 'live'`)
 @Check('tables_closed_has_at', `(status = 'closed') = (closed_at is not null)`)
 @Check('tables_mode_known', `mode in ('live', 'turns')`)
 @Check('tables_privacy_known', `privacy in ('invite', 'room', 'friends', 'public')`)
@@ -72,6 +74,13 @@ export class Table
 
     @Column({ type: 'varchar', length: 8, default: 'low' })
     blinds!: string;
+
+    /**
+     * The time control each side plays under (`table/clocks.ts`), or null for a game with none and
+     * for a turn-based table, whose limit is the day a move every turn-based table gives.
+     */
+    @Column({ type: 'varchar', length: 8, nullable: true })
+    clock!: string | null;
 
     @Column({ type: 'boolean' })
     chat!: boolean;

@@ -18,7 +18,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const wordsIn = (check: string) =>
     [...(getMetadataArgsStorage().checks.find((one) => one.name === check)?.expression ?? '').matchAll(/'([a-z-]+)'/g)].map((match) => match[1]);
 
-const rules = (partners: unknown) => ({ seats: [2, 4], modes: ['live'], targets: [], stakes: 'none', partners, hasCube: false, hasBlinds: false });
+const rules = (partners: unknown) => ({ seats: [2, 4], modes: ['live'], targets: [], stakes: 'none', partners, hasCube: false, hasBlinds: false, clocks: [] });
 
 const body = { game: 'hokm', seats: 4, mode: 'live', privacy: 'public', target: 7, cube: false, blinds: 'low', chat: true, voice: 'off', invitees: [] };
 

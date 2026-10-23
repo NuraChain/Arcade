@@ -4,6 +4,7 @@ import { Game, Match, Table, TableSeat } from '../../entities/index.ts';
 
 import type { CataloguePort } from '../../ports.ts';
 import type { GameList, LiveCounts } from '../../schemas.ts';
+import { isClock } from '../table/clocks.ts';
 import type { Partners } from '../table/teams.ts';
 
 /**
@@ -28,6 +29,7 @@ interface GameRow
     partners: Partners;
     has_cube: boolean;
     has_blinds: boolean;
+    clocks: string[];
 }
 
 /**
@@ -41,7 +43,7 @@ interface GameRow
 const GAMES_SQL = `
     select g.id, g.slug, g.name_key, g.blurb_key, g.category_key, g.category,
            g.min_players, g.max_players, g.status,
-           r.seats, r.modes, r.targets, r.stakes, r.partners, r.has_cube, r.has_blinds
+           r.seats, r.modes, r.targets, r.stakes, r.partners, r.has_cube, r.has_blinds, r.clocks
     from games g
     join game_rules r on r.game_id = g.id
     order by g.sort_order
@@ -79,7 +81,8 @@ export function createCatalogueService(db: DataSource): CataloguePort
                         stakes: row.stakes,
                         partners: row.partners,
                         hasCube: row.has_cube,
-                        hasBlinds: row.has_blinds
+                        hasBlinds: row.has_blinds,
+                        clocks: row.clocks.filter(isClock)
                     }
                 }))
             };

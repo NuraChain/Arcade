@@ -98,7 +98,7 @@ describe('games: the server and the landing agree', () =>
         expect(quickOf(seed, {})).toMatchObject({ ok: true, make: { seats: 2, teams: false } });
     });
 
-    it('offers a cube and blinds exactly where the create form does', () =>
+    it('offers a cube, blinds and time controls exactly where the create form does', () =>
     {
         expect(GAME_SEEDS.filter((game) => game.hasCube).map((game) => game.id)).toEqual(['backgammon']);
         expect(GAME_SEEDS.filter((game) => game.hasBlinds).map((game) => game.id)).toEqual(['poker']);
@@ -109,6 +109,7 @@ describe('games: the server and the landing agree', () =>
 
             expect(rules.hasCube, `${ seed.id } cube`).toBe(seed.hasCube);
             expect(rules.hasBlinds, `${ seed.id } blinds`).toBe(seed.hasBlinds);
+            expect([...rules.clocks], `${ seed.id } clocks`).toEqual(seed.clocks);
         }
     });
 

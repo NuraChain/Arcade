@@ -4,6 +4,7 @@ import { RARITY_IDS } from './domains/achieve/rarity.ts';
 import { PARTY_ENDS, PARTY_STAGES } from './domains/party/rules.ts';
 import { VARIANTS } from './domains/match/sides.ts';
 import { BREAK_DAYS, ELIGIBILITIES, ESCROW_STATES } from './domains/stake/policy.ts';
+import { CLOCKS } from './domains/table/clocks.ts';
 import { PARTNERS } from './domains/table/teams.ts';
 import { VOICE_SCOPES } from './domains/table/voices.ts';
 
@@ -53,7 +54,10 @@ export const tableRules = object({
     stakes: enumOf(['none', 'play-money']),
     partners: enumOf(PARTNERS),
     hasCube: boolean(),
-    hasBlinds: boolean()
+    hasBlinds: boolean(),
+
+    /** The time controls a live table is offered (`table/clocks.ts`). Empty means the game has none. */
+    clocks: array(enumOf(CLOCKS))
 });
 
 /**
