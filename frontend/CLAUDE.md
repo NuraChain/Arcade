@@ -318,8 +318,8 @@ It opens on its first unread line now, under "Unread messages", counted back fro
 the server counts unread (every line that is not the reader's own) and reading back up to two
 hundred lines to reach it (`REACH_BACK`) and putting it 56px down, clear of the day's pill that
 floats at the top (`UNREAD_AT`); otherwise where the reader last left it, for as long as the tab
-lives (`places`: a distance from the end, never what was said there, kept as the reader scrolls once
-the thread is placed); otherwise at its end.
+lives (the chat store's `keepPlace`: a distance from the end, never what was said there, kept as the
+reader scrolls once the thread is placed, and forgotten by its `reset`); otherwise at its end.
 Nothing is marked read until the thread is placed, so a reader put far above the end has read
 nothing below it. Scrolled up, a round button at the foot goes to the end and wears how many unread
 lines wait there. A line that arrives at the end rises into place (180 ms, opacity and a small

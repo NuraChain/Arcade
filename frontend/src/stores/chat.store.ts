@@ -78,6 +78,10 @@ export interface ChatApi
     typing(id: string): string[];
     draft(id: string): string;
     setDraft(id: string, text: string): void;
+
+    /** How far above its end the reader left a thread, for as long as the tab lives: a place, never what was said there. */
+    placeOf(id: string): number | undefined;
+    keepPlace(id: string, distance: number | null): void;
     send(id: string, text: string): Promise<void>;
 
     /** Sends again a line the server did not take, under the id it was sealed with. */
@@ -154,6 +158,7 @@ export const useChat = createStore((): ChatApi =>
     const [seen, setSeen] = createSignal<Record<string, number>>({});
     const [typists, setTypists] = createSignal<Record<string, Typist[]>>({});
     const [drafts, setDrafts] = createSignal<Record<string, string>>({});
+    const places = new Map<string, number>();
     const [pins, setPins] = createSignal<Record<string, boolean>>({});
     const [outbox, setOutbox] = createSignal<readonly Outgoing[]>([]);
 
@@ -534,6 +539,20 @@ export const useChat = createStore((): ChatApi =>
 
         draft: (id) => drafts()[id] ?? '',
 
+        placeOf: (id) => places.get(id),
+
+        keepPlace(id, distance)
+        {
+            if (distance === null)
+            {
+                places.delete(id);
+            }
+            else
+            {
+                places.set(id, distance);
+            }
+        },
+
         setDraft(id, text)
         {
             setDrafts((current) => (current[id] === text ? current : { ...current, [id]: text }));
@@ -767,6 +786,7 @@ export const useChat = createStore((): ChatApi =>
             setSeen({});
             setTypists({});
             setDrafts({});
+            places.clear();
             setPins({});
             setOutbox([]);
             guesses.clear();

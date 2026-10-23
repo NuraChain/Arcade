@@ -682,6 +682,22 @@ describe('chat store', () =>
         expect(clock.pending()).toBe(0);
     });
 
+    it('forgets where the reader left every thread when it is reset', () =>
+    {
+        const chat = useChat();
+
+        chat.keepPlace('c-reza', 500);
+        expect(chat.placeOf('c-reza')).toBe(500);
+
+        chat.keepPlace('c-reza', null);
+        expect(chat.placeOf('c-reza')).toBeUndefined();
+
+        chat.keepPlace('c-reza', 500);
+        chat.reset();
+
+        expect(chat.placeOf('c-reza')).toBeUndefined();
+    });
+
     /** The api's own source, counting the reads of a thread and holding those begun while a gate stands. */
     const counted = () =>
     {
