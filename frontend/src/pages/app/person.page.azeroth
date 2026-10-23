@@ -1,5 +1,5 @@
 import PersonRecord from '../../components/social/person-record.component.azeroth';
-import { createResource, useHead, useNavigate, useParams } from 'azerothjs';
+import { createResource, untrack, useHead, useNavigate, useParams } from 'azerothjs';
 
 import { ApiError, client } from '../../api.ts';
 import Page from '../../components/app/page.component.azeroth';
@@ -38,8 +38,11 @@ export default component PersonPage()
     const record = useRecord();
     const { navigate } = useNavigate();
 
+    /** Read once: a page that is being left still sees the address it is going to. */
+    const opened = untrack(() => params().handle ?? '');
+
     const view = createResource(
-        () => params().handle ?? null,
+        () => (opened === '' ? null : opened),
         async (handle) =>
         {
             try
@@ -70,14 +73,14 @@ export default component PersonPage()
 
     derived missing = view.data() === null;
 
-    derived person = missing ? null : view.data()?.person ?? people.byHandle(params().handle ?? '') ?? null;
+    derived person = missing ? null : view.data()?.person ?? people.byHandle(opened) ?? null;
 
     derived failed = person === null && view.error() !== null;
 
     derived loading = person === null && !missing && !failed;
 
     const face = createResource(
-        () => params().handle === undefined ? null : { handle: params().handle!, lang: locale.locale() },
+        () => (opened === '' ? null : { handle: opened, lang: locale.locale() }),
         (asked) => client.chain.person({ params: { handle: asked.handle }, query: { lang: asked.lang } }),
         { name: 'chain.person' }
     );
@@ -85,7 +88,7 @@ export default component PersonPage()
     derived shown = face.data()?.profile;
 
     derived name = person === null
-        ? missing ? locale.t('person.notFound') : params().handle ?? ''
+        ? missing ? locale.t('person.notFound') : opened
         : (shown?.displayName ?? '') === '' ? person.handle : shown!.displayName;
 
     useHead({ title: () => name });

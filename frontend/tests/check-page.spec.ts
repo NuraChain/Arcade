@@ -13,6 +13,7 @@ import { useSession } from '../src/stores/session.store.ts';
 import type { MatchProof } from '../src/api.ts';
 import { server } from './fake-api.ts';
 import { PLAYERS, STRANGER, proofOf, signed } from './proofs.ts';
+import { halfwayOut } from './leaving.ts';
 
 const MATCH = '3f2b6c1e-6d1a-4b4e-9c55-2f4a8a9b1c01';
 
@@ -71,6 +72,19 @@ describe('the page that checks a game played for NURA', () =>
         expect(container.textContent).toContain('Sara Kamali');
         expect(container.textContent).toContain(PLAYERS[0].address.slice(0, 6).toLowerCase());
         expect(server.calls).toContain('matches.proof');
+    });
+
+    it('keeps the game it was built for while it is being left', async () =>
+    {
+        server.proofs[MATCH] = await proofOf('ludo', { wired: true, resign: true });
+
+        const container = await halfwayOut(
+            [{ path: '/app/me/wallet/check/:id', component: () => CheckPage() as HTMLElement }],
+            `/app/me/wallet/check/${ MATCH }`,
+            (root) => verdict(root) === 'Everything checks out.'
+        );
+
+        expect(verdict(container)).toBe('Everything checks out.');
     });
 
     it('says where the seed and the server part, and shows both', async () =>

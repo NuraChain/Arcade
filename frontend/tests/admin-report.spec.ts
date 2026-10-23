@@ -13,6 +13,7 @@ import { useReports } from '../src/stores/reports.store.ts';
 import { useSession } from '../src/stores/session.store.ts';
 import { useToasts } from '../src/stores/toasts.store.ts';
 import { ApiError, client, reportFiled, server, staffLogged, staffMember } from './fake-api.ts';
+import { halfwayOut } from './leaving.ts';
 
 vi.mock('../src/api.ts', async () => await import('./fake-api.ts'));
 
@@ -87,6 +88,19 @@ afterEach(() =>
 
 describe('one report', () =>
 {
+    it('keeps the report it was built for while the page is being left', async () =>
+    {
+        const id = reportFiled({ at: hoursAgo(3), by: 'sara.k', about: 'reza.t' });
+
+        const container = await halfwayOut(
+            [{ path: '/admin/reports/:id', component: () => ReportPage({}) as unknown as HTMLElement }],
+            `/admin/reports/${ id }`,
+            (root) => said(root, '[data-said]') === 'sara.k reported reza.t'
+        );
+
+        expect(said(container, '[data-said]')).toBe('sara.k reported reza.t');
+    });
+
     it('reads what it is for, who reported whom, its status and when, both people, the message, their games together and what the staff did', async () =>
     {
         const id = reportFiled({

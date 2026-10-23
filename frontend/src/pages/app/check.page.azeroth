@@ -28,7 +28,8 @@ export default component CheckPage()
 
     useHead({ title: () => locale.t('fair.title') });
 
-    derived id = params().id ?? '';
+    /** Read once: a page that is being left still sees the address it is going to. */
+    const id = untrack(() => params().id ?? '');
 
     const proof = createResource(
         () => (id === '' ? null : id),

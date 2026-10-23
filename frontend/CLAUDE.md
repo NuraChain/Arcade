@@ -634,6 +634,17 @@ memory and then torn down and drawn again when the answer came. Nothing inside a
 change of person, because the router builds a page per route AND params (`identity` in its
 `routes.js`): another handle is another page.
 
+**So a page reads its route's params once, and must.** A page that is being left is still in the
+document until its leave ends, and its `useParams()` already answers for the address it is going
+to. A page that read `params()` in a `derived` or a resource's key followed it: a game's page and
+its create page said "No such game." on their way out (5 ms after the press, measured on the built
+server), the profile, the check page and the admin's person and report pages lost what they showed,
+and the chat page, whose leave lasts its whole fade, said "No such conversation." and lost the
+reader's place (*A thread opens where the reader belongs*).
+Each reads its param once, `untrack(() => params().x ?? '')`; the play page reads its id only behind
+a check that the address is still a table's. `tests/leaving.ts` (`halfwayOut`) opens a page with the
+app's own kind of leave and hands back the page halfway out, and each of those pages' specs holds it.
+
 The friends page had it twice, and neither needed an object. Its search field sat in a branch whose
 condition counted the friends, an array that is new whenever anything about the people behind it is
 read again, so a friend request arriving took the field out from under the caret (on a phone, the

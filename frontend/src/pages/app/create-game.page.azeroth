@@ -1,4 +1,4 @@
-import { useHead, useNavigate, useParams } from 'azerothjs';
+import { untrack, useHead, useNavigate, useParams } from 'azerothjs';
 
 import Page from '../../components/app/page.component.azeroth';
 import PageHeader from '../../components/app/page-header.component.azeroth';
@@ -15,7 +15,10 @@ export default component CreateGamePage()
     const params = useParams();
     const { navigate } = useNavigate();
 
-    derived game = catalogue.bySlug(params().slug ?? '') ?? null;
+    /** Read once: a page that is being left still sees the address it is going to. */
+    const slug = untrack(() => params().slug ?? '');
+
+    derived game = catalogue.bySlug(slug) ?? null;
 
     derived paused = game !== null && catalogue.status(game.id) === 'disabled';
 

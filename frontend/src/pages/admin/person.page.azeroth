@@ -1,4 +1,4 @@
-import { createResource, Link, useHead, useParams } from 'azerothjs';
+import { createResource, Link, untrack, useHead, useParams } from 'azerothjs';
 
 import { outranks, type ClearPart } from '../../../../backend/src/domains/admin/roles.ts';
 import type { AdminPerson } from '../../../../backend/src/schemas.ts';
@@ -87,8 +87,11 @@ export default component PersonPage()
     const params = useParams();
     const address = useAddress();
 
+    /** Read once: a page that is being left still sees the address it is going to. */
+    const opened = untrack(() => params().handle ?? '');
+
     const view = createResource(
-        () => params().handle ?? null,
+        () => (opened === '' ? null : opened),
         async (handle) =>
         {
             try
@@ -132,7 +135,7 @@ export default component PersonPage()
 
     derived me = session.account();
 
-    derived handle = person?.handle ?? params().handle ?? '';
+    derived handle = person?.handle ?? opened;
 
     derived name = person?.displayName ?? '';
 

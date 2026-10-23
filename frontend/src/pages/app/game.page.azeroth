@@ -1,4 +1,4 @@
-import { useHead, useParams } from 'azerothjs';
+import { untrack, useHead, useParams } from 'azerothjs';
 
 import Page from '../../components/app/page.component.azeroth';
 import GameHero from '../../components/games/game-hero.component.azeroth';
@@ -35,7 +35,10 @@ export default component GamePage()
     const shell = useShell();
     const params = useParams();
 
-    derived game = catalogue.bySlug(params().slug ?? '') ?? null;
+    /** Read once: a page that is being left still sees the address it is going to. */
+    const slug = untrack(() => params().slug ?? '');
+
+    derived game = catalogue.bySlug(slug) ?? null;
 
     derived me = account.user()?.handle ?? '';
 

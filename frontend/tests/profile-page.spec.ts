@@ -16,6 +16,7 @@ import { useSession } from '../src/stores/session.store.ts';
 import type { Account } from '../../backend/src/schemas.ts';
 import { useSocial } from '../src/stores/social.store.ts';
 import { client, server } from './fake-api.ts';
+import { halfwayOut } from './leaving.ts';
 
 vi.mock('../src/api.ts', async () => await import('./fake-api.ts'));
 
@@ -324,6 +325,18 @@ describe('somebody else\'s profile page', () =>
         useSession().establish(account);
         usePeople().reset();
         useSocial().reset();
+    });
+
+    it('keeps the person it was built for while it is being left', async () =>
+    {
+        const container = await halfwayOut(
+            [{ path: '/app/people/:handle', component: (): HTMLElement => PersonPage() as HTMLElement }],
+            '/app/people/mina',
+            (root) => root.querySelector('#profile-name')?.textContent === 'mina'
+        );
+
+        expect(container.querySelector('#profile-name')?.textContent).toBe('mina');
+        expect(container.textContent).not.toContain(useLocale().t('person.notFound'));
     });
 
     it('draws somebody it already knows once, and asks for their record once', async () =>

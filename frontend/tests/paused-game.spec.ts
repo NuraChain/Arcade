@@ -5,6 +5,7 @@ import { RouterProvider, Routes, createMemoryHistory, createRouter, type Route }
 import GameHero from '../src/components/games/game-hero.component.azeroth';
 import GameTile from '../src/components/games/game-tile.component.azeroth';
 import CreateGamePage from '../src/pages/app/create-game.page.azeroth';
+import GamePage from '../src/pages/app/game.page.azeroth';
 import GamesPage from '../src/pages/app/games.page.azeroth';
 import LeaderboardPage from '../src/pages/app/leaderboard.page.azeroth';
 import { GAMES, type GameId } from '../src/data/games.ts';
@@ -15,6 +16,7 @@ import { useCatalogue } from '../src/stores/catalogue.store.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
 import { useSession } from '../src/stores/session.store.ts';
 import { establishAccount, server } from './fake-api.ts';
+import { halfwayOut } from './leaving.ts';
 
 vi.mock('../src/api.ts', async () => await import('./fake-api.ts'));
 
@@ -157,5 +159,28 @@ describe('a game the staff paused, as a player sees it', () =>
         await catalogue({ poker: 'disabled' });
 
         expect((await alone(() => GameTile({ game: game('poker') }))).textContent).toContain('متوقف');
+    });
+});
+
+describe('a game\'s pages while they are being left', () =>
+{
+    it('keep the game they were built for, and never say there is no such game', async () =>
+    {
+        await catalogue({});
+
+        const name = useLocale().t(game('ludo').nameKey);
+        const pages: [string, Route][] = [
+            ['/app/games/ludo', { path: '/app/games/:slug', component: () => GamePage({}) as unknown as HTMLElement }],
+            ['/app/games/ludo/create', { path: '/app/games/:slug/create', component: () => CreateGamePage({}) as unknown as HTMLElement }]
+        ];
+
+        for (const [at, route] of pages)
+        {
+            const container = await halfwayOut([route], at, (root) => root.textContent?.includes(name) === true);
+
+            expect(container.textContent, at).toContain(name);
+            expect(container.textContent, at).not.toContain(useLocale().t('game.notFound'));
+            cleanup();
+        }
     });
 });

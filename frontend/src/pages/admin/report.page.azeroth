@@ -1,4 +1,4 @@
-import { createResource, Link, useHead, useParams } from 'azerothjs';
+import { createResource, Link, untrack, useHead, useParams } from 'azerothjs';
 
 import { outranks, type ReportOutcome } from '../../../../backend/src/domains/admin/roles.ts';
 import type { AdminReport } from '../../../../backend/src/schemas.ts';
@@ -46,8 +46,11 @@ export default component ReportPage()
     const desk = useReports();
     const params = useParams();
 
+    /** Read once: a page that is being left still sees the address it is going to. */
+    const opened = untrack(() => params().id ?? '');
+
     const view = createResource(
-        () => params().id ?? null,
+        () => (opened === '' ? null : opened),
         async (id) =>
         {
             try
@@ -83,7 +86,7 @@ export default component ReportPage()
 
     derived me = session.account();
 
-    derived id = report?.id ?? params().id ?? '';
+    derived id = report?.id ?? opened;
 
     derived category = report === null ? '' : locale.t(CATEGORY_WORDS[report.category] ?? 'report.category.other');
 

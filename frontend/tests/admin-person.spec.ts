@@ -13,6 +13,7 @@ import { useOverlay } from '../src/stores/overlay.store.ts';
 import { useSession } from '../src/stores/session.store.ts';
 import { useToasts } from '../src/stores/toasts.store.ts';
 import { ApiError, client, server, staffLogged, staffMember } from './fake-api.ts';
+import { halfwayOut } from './leaving.ts';
 
 vi.mock('../src/api.ts', async () => await import('./fake-api.ts'));
 
@@ -125,6 +126,19 @@ afterEach(() =>
 
 describe('a person, as the staff read them', () =>
 {
+    it('keeps the person it was built for while the page is being left', async () =>
+    {
+        told();
+
+        const container = await halfwayOut(
+            [{ path: '/admin/people/:handle', component: () => PersonPage({}) as unknown as HTMLElement }],
+            '/admin/people/sara.k',
+            (root) => said(root, '[data-paid]') === 'Accepted the terms last week.'
+        );
+
+        expect(said(container, '[data-paid]')).toBe('Accepted the terms last week.');
+    });
+
     it('tells their account and paid play, wallets, live sign-ins by browser, browsers with keys, reports both ways, games and paid games', async () =>
     {
         told();
