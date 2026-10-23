@@ -463,7 +463,7 @@ export function createChessTable(options: ChessOptions): ChessTable
             { offset: 1, rotate: '-76deg' }
         ], { duration: TIP_MS, easing: 'cubic-bezier(0.45, 0, 0.55, 1)' }).done;
 
-        options.sound()?.play('king-fall', { gain: 0.8 });
+        options.sound()?.play('king-fall');
     };
 
     /** One logged move, played from where the table shows it: the piece travels, and whatever it takes goes as it arrives. */

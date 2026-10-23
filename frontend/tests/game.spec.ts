@@ -667,7 +667,7 @@ describe('the sound layer', () =>
         sound.dispose();
     });
 
-    it('has a voice for every cue still synthesised and for the calls a game\'s own pack holds while it is on its way', async () =>
+    it('has a voice for each call a game\'s own pack holds while that pack is on its way', async () =>
     {
         const fake = stub();
         const sound = createSound(true);
@@ -675,7 +675,7 @@ describe('the sound layer', () =>
         await tap();
         await flush();
 
-        const silent = (['check', 'promote', ...CUES.hokm, 'cube'] as const).filter((cue) =>
+        const silent = ([...CUES.hokm, 'cube', 'check', 'promote'] as const).filter((cue) =>
         {
             const before = fake.oscillators();
 
@@ -723,6 +723,27 @@ describe('the sound layer', () =>
         sound.play('six');
 
         expect(fake.levels()).toEqual([0.45, 0.45, 0.6, 0.9, 0.6]);
+
+        sound.dispose();
+    });
+
+    it('plays chess\'s check from its own pack as what the table says, a promotion as a flourish and the king laid down as a piece', async () =>
+    {
+        vi.stubGlobal('fetch', () => Promise.resolve({ ok: true, arrayBuffer: () => Promise.resolve(pack({ 'check': [[1]], 'promote': [[2]], 'king-fall': [[3]], 'piece-move': [[4]] })) }));
+        const fake = stub();
+        const sound = createSound(true, 'chess');
+
+        await tap();
+        await flush();
+        await flush();
+
+        sound.play('check');
+        sound.play('promote');
+        sound.play('king-fall');
+        sound.play('piece-move');
+
+        expect(fake.levels()).toEqual([0.45, 0.6, 0.9, 0.9]);
+        expect(fake.oscillators(), 'a chess cue was synthesised though its recording had arrived').toBe(0);
 
         sound.dispose();
     });

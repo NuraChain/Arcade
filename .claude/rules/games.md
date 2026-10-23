@@ -4339,8 +4339,9 @@ is far (170 to 380 ms); a knight hops an arc (300 ms); a capture happens at cont
 run, where the taken piece fades on its square (170 ms) and a heavier knock of wood sounds
 (`piece-capture`); a piece set down clicks (`piece-move`); castling moves the king and then the
 rook, 40% behind it, with a click for each; a pawn that promotes arrives as a pawn and becomes its
-piece with a pop and a sparkle (`promote`, 280 ms); and once the move has landed, check rings the
-king's square with its chime (`check`) and mate tips the king over (560 ms). The turn passes when
+piece with a pop and a rising run (`promote`, 280 ms); and once the move has landed, check rings the
+king's square with a bell's tap (`check`) and mate tips the king over (560 ms), laid down with a knock
+and a bounce (`king-fall`). The turn passes when
 the piece is down, not when it sets off. Less motion is the stage's fades with every cue kept.
 `chess-table.spec.ts` holds each on a manual clock.
 
@@ -4911,6 +4912,18 @@ the reader already holds is not rung again when a press of their own is refused 
 it back, at the same revision (`turnChime`'s key). `poker-cues.spec.ts` holds the knock, the gather,
 the sequences the gather joins, and the turn.
 
+**A chess table sounds like wood, with a bell for a check.** A move is one of five takes of a piece
+set down and a capture one of three heavier knocks (Kenney's Impact Sounds), so forty moves do not
+repeat one another every third time. A check was a synthesised chime and is a struck bell cut to a tap
+(`impactBell_heavy`, E and F sharp, faded over its last 160 ms), heard after the piece's click on the
+interface bus, as loud as the turn. A promotion was a synthesised sparkle and is a rising run on steel
+(`jingles_STEEL02`: C, E and G sharp, on the jingle bus, as Ludo's six is), whose shape is not the
+turn's two steps. The mated king is laid down on the wood with a bounce (`king-fall`: a plank's knock
+with its boom taken off and a light knock 80 ms after it, the builder's `layer` with a delay), 3 dB
+under the click on a phone's speaker where the soft thud it was sat 19 under, at the level the builder
+sets and no longer at a gain of the table's own. No cue at a table is synthesised now but while its
+pack is on its way. `game.spec.ts` holds the three from chess's own pack and the bus each is heard on.
+
 **A Ludo table sounds like plastic on a printed board.** A pawn's step is a
 short light drop (Kenney Interface Sounds' `drop_002` and `drop_003`, about 780 Hz), where it was a
 knock of wood at 340 Hz; a capture is a bright clack (`impactPlate_light`, cut to 0.16 s, 1.2 kHz)
@@ -5279,7 +5292,7 @@ switching tables never has to unlock audio again. The spec is
   `king-fall`. The neutral extension is load-bearing: a download manager (IDM and its kind, common
   among Persian users) intercepts any `.mp3` a page fetches and hands the page an empty 204, which
   is how the first build of this was silent on the owner's own machine while curl got a perfect 200.
-  Chess's check and promotion are still synthesised. A cue is never shared
+  A cue is never shared
   between two games, because the takes a page has fetched are kept for every handle on it: a backgammon
   table opened after a Hokm one would have offered its cube with Hokm's slap, so the cube is `cube` and
   no longer `trump`. A recording that failed to
@@ -5298,8 +5311,9 @@ switching tables never has to unlock audio again. The spec is
   a 0.7 master and a limiter; each play varies its rate by up to 10% and its level by 1.5 dB, rotates
   through the takes, is panned by where it happens, and the same cue is not started more than three
   times at once or twice within 35ms. What the table SAYS (the turn, the clock, a refusal, nothing
-  to move, the chime) goes to the interface bus whether it is a recording or a tone (`INTERFACE`),
-  the end of a game to the jingles, and every other recording to the foley: recorded, the turn
+  to move, the chime, a check) goes to the interface bus whether it is a recording or a tone
+  (`INTERFACE`), the end of a game and a flourish (a six, a pawn home, a promotion) to the jingles,
+  and every other recording to the foley: recorded, the turn
   would otherwise have come out twice as loud as the tone it replaced.
 - **The end is heard as it went for whoever reads it** (`endCue` in `game/sound.ts`). A seat that
   won hears `win` (a pizzicato run that rises), one that lost or walked away `lose` (one that
@@ -5327,10 +5341,10 @@ switching tables never has to unlock audio again. The spec is
   went through a table of timed cues worked out from a batch (`pokerBeats`), tied to nothing on
   the felt, until its chips flew. The chime for a turn that becomes the reader's is `turnChime`
   in `components/games/table-cues.ts`, handed whichever sound handle the board holds, so a
-  board has one handle. Poker's chips are two more Kenney recordings,
-  `chip-lay` for a bet and `chips-stack` for a pot. Chess's pieces are two more Kenney Impact
-  Sounds cues, `piece-move` (three takes of a short bright click, a piece set down) and
-  `piece-capture` (two takes of a heavier wooden knock), measured before they were chosen: the
+  board has one handle. Poker's chips are BigSoundBank's and Kenney's (*A poker table sounds like
+  clay chips and knuckles*). Chess's pieces are Kenney Impact Sounds cues, `piece-move` (five takes
+  of a short bright click, a piece set down) and `piece-capture` (three takes of a heavier wooden
+  knock), measured before they were chosen: the
   clicks about 60 ms long with their energy near 1.1 kHz, the knocks 100 ms near 270 Hz, the way a
   chess app's move and capture differ. The knight and the bishop have four more cues of their own
   (*The knight is a horse and the bishop an elephant*, under *Chess*), in chess's own pack.

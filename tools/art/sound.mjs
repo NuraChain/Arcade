@@ -28,10 +28,12 @@ const CUP = 'lowpass=f=2400,lowpass=f=2400,equalizer=f=180:t=q:w=1:g=4';
  * sound. Each pack is written to a file of its own, which only the tables that play it fetch.
  * A take with a shape is made rather than cut: `cuts` are the stretches of the source it keeps, each `apart`
  * seconds after the one before (two hooves of a trot), each faded out over `tail`; `layer` is a second source
- * mixed under them at a level in decibels; `pitch` plays the whole slower and lower; `filter` is an ffmpeg
+ * mixed under them at a level in decibels, as many seconds after them as a third value says (the bounce of a
+ * king laid down); `pitch` plays the whole slower and lower; `filter` is an ffmpeg
  * filter on the mix; `low` takes away what is under that many hertz; `gain` is in decibels; and `kbps` spends
  * fewer bits on a long voice than the 96 a knock needs. The levels were set by measuring each take beside the
- * chess click: a hoof as loud as the click, a step 4 dB under it on a phone's speaker, a call 6 dB under it.
+ * chess click: a hoof as loud as the click, a step 4 dB under it on a phone's speaker, a call 6 dB under it,
+ * the king laid down 3 dB under it, its boom taken off so that a phone plays it at all.
  * Kenney's card recordings open on the room's own noise, which a plain take mistakes for the sound and keeps
  * instead of the card, so each is cut round its card: a slide 5 dB under the click, a card laid 3.5 under it.
  */
@@ -107,16 +109,22 @@ export const SOUNDS = [
     ['poker', 'knock', KNOCKS, 0.3, { cuts: [[2.222, 2.322], [2.666, 2.766]], apart: 0.17, tail: 0.05, filter: KNUCKLE, gain: 1.1 }],
     ['poker', 'knock', KNOCKS, 0.3, { cuts: [[7.636, 7.736], [7.952, 8.052]], apart: 0.16, tail: 0.05, filter: KNUCKLE, gain: -1 }],
     ['chess', 'piece-move', 'impactGeneric_light_000.ogg', 0.16],
+    ['chess', 'piece-move', 'impactGeneric_light_001.ogg', 0.16],
+    ['chess', 'piece-move', 'impactGeneric_light_002.ogg', 0.16],
     ['chess', 'piece-move', 'impactGeneric_light_003.ogg', 0.16],
     ['chess', 'piece-move', 'impactGeneric_light_004.ogg', 0.16],
+    ['chess', 'piece-capture', 'impactWood_medium_001.ogg', 0.24, { gain: 1.5 }],
     ['chess', 'piece-capture', 'impactWood_medium_002.ogg', 0.24],
     ['chess', 'piece-capture', 'impactWood_medium_003.ogg', 0.24],
+    ['chess', 'check', 'impactBell_heavy_003.ogg', 0.32, { cuts: [[0, 0.32]], tail: 0.16, low: 200, gain: 4, kbps: 64 }],
+    ['chess', 'check', 'impactBell_heavy_000.ogg', 0.32, { cuts: [[0, 0.32]], tail: 0.16, low: 200, gain: 3, kbps: 64 }],
+    ['chess', 'promote', 'jingles_STEEL02.ogg', 0.9, { cuts: [[0, 0.9]], tail: 0.3, gain: -4.5, kbps: 64 }],
     ['chess', 'horse-step', HOOVES, 0.21, { cuts: [[1.252, 1.330], [0.508, 0.575]], apart: 0.11, low: 90, gain: 10 }],
     ['chess', 'horse-step', HOOVES, 0.22, { cuts: [[2.000, 2.075], [0.893, 0.960]], apart: 0.125, low: 90, gain: 10 }],
     ['chess', 'horse-call', 'bigsoundbank-1541-horse-neighing-4.ogg', 0.95, { cuts: [[0.09, 1.04]], tail: 0.14, low: 120, gain: -10.5, kbps: 56 }],
     ['chess', 'elephant-step', 'impactSoft_heavy_000.ogg', 0.42, { cuts: [[0, 0.4]], layer: ['footstep_grass_001.ogg', 12], pitch: 0.85, filter: 'equalizer=f=190:t=q:w=1:g=8', low: 40, gain: -16, kbps: 64 }],
     ['chess', 'elephant-call', 'commons-elephant-voice-trumpeting.ogg', 0.98, { cuts: [[0.14, 1.12]], tail: 0.14, low: 150, gain: 0, kbps: 56 }],
-    ['chess', 'king-fall', 'impactSoft_medium_001.ogg', 0.25]
+    ['chess', 'king-fall', 'impactPlank_medium_003.ogg', 0.32, { cuts: [[0, 0.32]], tail: 0.1, layer: ['impactWood_light_000.ogg', -12, 0.08], filter: 'highpass=f=250,equalizer=f=900:t=q:w=1.2:g=6', gain: 5.5 }]
 ];
 
 const fixed = (value) => Number(value.toFixed(3));
@@ -128,7 +136,7 @@ function shaped(source, most, shape)
     const inputs = ['-i', join(SOURCE, source), ...(shape.layer === undefined ? [] : ['-i', join(SOURCE, shape.layer[0])])];
     const cuts = shape.cuts.map(([from, to], index) =>
         `[0:a]aformat=channel_layouts=mono,atrim=${ from }:${ to },asetpts=PTS-STARTPTS,afade=t=in:d=0.004,afade=t=out:st=${ fixed(to - from - tail) }:d=${ tail },adelay=${ Math.round(index * (shape.apart ?? 0) * 1000) }[c${ index }]`);
-    const layer = shape.layer === undefined ? [] : [`[1:a]aformat=channel_layouts=mono,volume=${ shape.layer[1] }dB[l]`];
+    const layer = shape.layer === undefined ? [] : [`[1:a]aformat=channel_layouts=mono,volume=${ shape.layer[1] }dB${ shape.layer[2] === undefined ? '' : `,adelay=${ Math.round(shape.layer[2] * 1000) }` }[l]`];
     const names = [...shape.cuts.map((_, index) => `[c${ index }]`), ...(shape.layer === undefined ? [] : ['[l]'])];
     const after = [
         'aresample=44100',

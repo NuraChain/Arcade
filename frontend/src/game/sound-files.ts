@@ -8,7 +8,7 @@ export const CUES = {
     ludo: ['die-shake', 'die-land', 'pawn-step', 'pawn-hit', 'pawn-yard', 'six', 'home'],
     backgammon: ['cup-shake', 'dice-wood', 'checker', 'checker-hit', 'checker-bar', 'checker-off', 'cube'],
     poker: ['chip-lay', 'chips-stack', 'chips-gather', 'knock'],
-    chess: ['piece-move', 'piece-capture', 'horse-step', 'horse-call', 'elephant-step', 'elephant-call', 'king-fall']
+    chess: ['piece-move', 'piece-capture', 'check', 'promote', 'horse-step', 'horse-call', 'elephant-step', 'elephant-call', 'king-fall']
 } as const;
 
 export type Pack = keyof typeof CUES;

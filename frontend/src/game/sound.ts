@@ -173,10 +173,10 @@ const TONES: Record<Tone, readonly Voice[]> = {
     ]
 };
 
-const JINGLES: ReadonlySet<Cue> = new Set<Cue>(['win', 'lose', 'draw', 'hand-won', 'six', 'home']);
+const JINGLES: ReadonlySet<Cue> = new Set<Cue>(['win', 'lose', 'draw', 'hand-won', 'six', 'home', 'promote']);
 
 /** What the table says rather than what is on it: as quiet as these were while they were synthesised. */
-const INTERFACE: ReadonlySet<Cue> = new Set<Cue>(['turn', 'tick', 'tick-hi', 'deny', 'pass', 'chime']);
+const INTERFACE: ReadonlySet<Cue> = new Set<Cue>(['turn', 'tick', 'tick-hi', 'deny', 'pass', 'chime', 'check']);
 
 const LEVELS: Record<Bus, number> = { foley: 0.9, ui: 0.45, jingle: 0.6 };
 
