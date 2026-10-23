@@ -1,27 +1,15 @@
 import type { GameId } from '../../data/games.ts';
-import { useNavigate } from 'azerothjs';
 
 import Icon from '../../icons/icon.component.azeroth';
-import type { IconName } from '../../icons/registry.ts';
 import { usePeople } from '../../stores/people.store.ts';
 import { useChat } from '../../stores/chat.store.ts';
 import { useGroups } from '../../stores/groups.store.ts';
 import { useCatalogue } from '../../stores/catalogue.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
-import { useSocial } from '../../stores/social.store.ts';
-import { useOverlay, type OverlayProps } from '../../stores/overlay.store.ts';
+import type { OverlayProps } from '../../stores/overlay.store.ts';
 import IconButton from '../ui/icon-button.component.azeroth';
-import { gameNameOf, groupNameOf, othersOf, titleOf } from './chat-title.ts';
-import ExpirySheet from './expiry-sheet.component.azeroth';
-import { attempt } from '../../lib/attempt.ts';
-
-interface Action
-{
-    id: string;
-    icon: IconName;
-    label: string;
-    run: () => void;
-}
+import { gameNameOf, groupNameOf, titleOf } from './chat-title.ts';
+import { conversationActions } from './conversation-actions.ts';
 
 export default component ChatActions(props: OverlayProps & { conversationId: string })
 {
@@ -29,12 +17,10 @@ export default component ChatActions(props: OverlayProps & { conversationId: str
     const catalogue = useCatalogue();
 
     const gameName = (game: GameId) => locale.t(catalogue.byId(game).nameKey);
-    const social = useSocial();
     const chat = useChat();
     const groups = useGroups();
     const people = usePeople();
-    const overlay = useOverlay();
-    const { navigate } = useNavigate();
+    const listed = conversationActions();
 
     derived conversation = chat.conversation(props.conversationId) ?? null;
 
@@ -42,87 +28,7 @@ export default component ChatActions(props: OverlayProps & { conversationId: str
         ? props.conversationId
         : locale.text(titleOf(conversation, chat.me(), people.byHandle, { group: groupNameOf(conversation, groups.byId), game: gameNameOf(conversation, gameName) }));
 
-    derived pinned = chat.pinned(props.conversationId);
-
-    derived muted = social.isMuted('conversation', props.conversationId);
-
-    derived unread = chat.unread(props.conversationId);
-
-    derived actions = (() =>
-    {
-        const list: Action[] = [
-            {
-                id: 'pin',
-                icon: 'star',
-                label: locale.t(pinned ? 'chats.unpin' : 'chats.pin'),
-                run: () => chat.togglePin(props.conversationId)
-            },
-            {
-                id: 'mute',
-                icon: muted ? 'sound' : 'sound-off',
-                label: locale.t(muted ? 'chat.unmute' : 'chat.mute'),
-                run: () => void attempt(social.toggleMute('conversation', props.conversationId), { kind: 'info', text: locale.t(muted ? 'chat.unmutedDone' : 'chat.mutedDone') })
-            },
-            {
-                id: 'expiry',
-                icon: 'timer',
-                label: locale.t('expiry.title'),
-                run: () =>
-                {
-                    props.close();
-                    overlay.open(
-                        ExpirySheet,
-                        { conversationId: props.conversationId },
-                        { label: locale.t('expiry.title') }
-                    );
-                }
-            }
-        ];
-
-        if (unread > 0)
-        {
-            list.push({
-                id: 'read',
-                icon: 'selected',
-                label: locale.t('chats.markRead'),
-                run: () => chat.markRead(props.conversationId)
-            });
-        }
-
-        const group = conversation?.groupId === null || conversation?.groupId === undefined ? undefined : groups.byId(conversation.groupId);
-        if (group !== undefined)
-        {
-            list.push({
-                id: 'group',
-                icon: 'people',
-                label: locale.t('chat.openGroup'),
-                run: () =>
-                {
-                    props.close();
-                    navigate(`/app/groups/${ group.id }`);
-                }
-            });
-        }
-        else
-        {
-            const others = conversation === null ? [] : othersOf(conversation, chat.me(), people.byHandle);
-            if (others.length === 1)
-            {
-                list.push({
-                    id: 'profile',
-                    icon: 'me',
-                    label: locale.t('chat.viewProfile'),
-                    run: () =>
-                    {
-                        props.close();
-                        navigate(`/app/people/${ others[0].handle }`);
-                    }
-                });
-            }
-        }
-
-        return list;
-    })();
+    derived actions = listed(props.conversationId);
 
     <div class="flex flex-col gap-1 p-3">
         <header class="flex items-center gap-3 px-2 pb-2 pt-1">
@@ -137,11 +43,8 @@ export default component ChatActions(props: OverlayProps & { conversationId: str
                         class="flex min-h-12 w-full cursor-pointer items-center gap-3 rounded-tile px-3 text-start text-ui-md text-text transition-colors hover:bg-raised/70"
                         onClick={ () =>
                         {
+                            props.close();
                             action.run();
-                            if (action.id !== 'group' && action.id !== 'profile')
-                            {
-                                props.close();
-                            }
                         } }
                     >
                         <Icon name={ action.icon } size={ 18 } />

@@ -1,32 +1,18 @@
 import type { Message } from '../../data/chat.ts';
 import { QUICK_REACTIONS } from '../../data/emoji.ts';
 import Icon from '../../icons/icon.component.azeroth';
-import type { IconName } from '../../icons/registry.ts';
 import { plainOf } from '../../lib/markdown.ts';
-import { copyText } from '../../lib/clipboard.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import type { OverlayProps } from '../../stores/overlay.store.ts';
 import IconButton from '../ui/icon-button.component.azeroth';
+import { flips, messageActions, type LineHandlers } from './actions.ts';
 import LazyEmojiPicker from './lazy-emoji-picker.component.azeroth';
 
-interface Action
-{
-    id: string;
-    icon: IconName;
-    label: string;
-    danger?: boolean;
-    run: () => void;
-}
-
-export default component MessageActions(props: OverlayProps & {
+export default component MessageActions(props: OverlayProps & LineHandlers & {
     message: Message;
     me: string;
     pick?: boolean;
     onReact: (emoji: string) => void;
-    onReply?: () => void;
-    onForward?: () => void;
-    onDelete?: () => void;
-    onPerson?: () => void;
 })
 {
     const locale = useLocale();
@@ -35,47 +21,13 @@ export default component MessageActions(props: OverlayProps & {
 
     derived preview = plainOf(props.message.text, locale.t('chat.spoilerPreview'));
 
-    derived mine = props.message.from === props.me;
-
     const react = (emoji: string) =>
     {
         props.close();
         props.onReact(emoji);
     };
 
-    const copy = async () =>
-    {
-        await copyText(props.message.text, 'chat.copied', { dedupe: 'chat-copy' });
-    };
-
-    derived actions = (() =>
-    {
-        const list: Action[] = [];
-
-        if (props.onReply !== undefined)
-        {
-            list.push({ id: 'reply', icon: 'reply', label: locale.t('chat.reply'), run: () => props.onReply?.() });
-        }
-
-        list.push({ id: 'copy', icon: 'copy', label: locale.t('chat.copy'), run: () => void copy() });
-
-        if (props.onForward !== undefined)
-        {
-            list.push({ id: 'forward', icon: 'forward', label: locale.t('chat.forward'), run: () => props.onForward?.() });
-        }
-
-        if (!mine && props.onPerson !== undefined)
-        {
-            list.push({ id: 'person', icon: 'me', label: locale.t('chat.aboutSender'), run: () => props.onPerson?.() });
-        }
-
-        if (mine && props.onDelete !== undefined)
-        {
-            list.push({ id: 'delete', icon: 'trash', label: locale.t('chat.delete'), danger: true, run: () => props.onDelete?.() });
-        }
-
-        return list;
-    })();
+    derived actions = messageActions(locale.t, props.message, props.me, props);
 
     <div class="flex flex-col gap-2 p-3">
         <header class="flex items-start gap-3 px-2 pt-1">
@@ -126,7 +78,7 @@ export default component MessageActions(props: OverlayProps & {
                             action.run();
                         } }
                     >
-                        <Icon name={ action.icon } size={ 18 } class={ action.icon === 'reply' || action.icon === 'forward' ? 'icon-flip' : undefined } />
+                        <Icon name={ action.icon } size={ 18 } class={ flips(action.icon) ? 'icon-flip' : undefined } />
                         { action.label }
                     </button>
                 </li>

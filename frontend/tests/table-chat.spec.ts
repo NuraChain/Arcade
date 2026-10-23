@@ -686,3 +686,49 @@ describe('a table’s chat that is read again', () =>
         }
     });
 });
+
+describe('a right click on a line at a table', () =>
+{
+    const menu = () => document.querySelector<HTMLElement>('[role="menu"]');
+
+    const offered = () => [...(menu()?.querySelectorAll('[data-item]') ?? [])].map((one) => one.getAttribute('data-item'));
+
+    const right = (target: Element) =>
+    {
+        const event = new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 300, clientY: 200 });
+
+        target.dispatchEvent(event);
+        return event;
+    };
+
+    afterEach(() => useOverlay().reset());
+
+    it('offers what the table’s own sheet offers, at the pointer: a reply and a copy, and a deletion of the reader’s own', async () =>
+    {
+        const room = server.conversations.find((row) =>
+            server.messages.some((one) => one.conversationId === row.id && one.kind === 'text' && one.from === 'alex')
+            && server.messages.some((one) => one.conversationId === row.id && one.kind === 'text' && one.from !== 'alex'))!;
+        const theirs = server.messages.filter((one) => one.conversationId === room.id && one.kind === 'text' && one.from !== 'alex').at(-1)!;
+        const mine = server.messages.filter((one) => one.conversationId === room.id && one.kind === 'text' && one.from === 'alex').at(-1)!;
+        const container = shown(room.id);
+        const bubble = (id: string) => container.querySelector(`[data-message="${ id }"] .bubble`);
+
+        await vi.waitFor(() => expect(bubble(theirs.id)).not.toBeNull(), { timeout: 4000 });
+
+        expect(right(bubble(theirs.id)!).defaultPrevented).toBe(true);
+        await vi.waitFor(() => expect(menu()).not.toBeNull(), { timeout: 4000 });
+
+        expect(offered(), 'a line of theirs').toEqual(['reply', 'copy']);
+        expect([...container.querySelectorAll<HTMLElement>(`[data-message="${ theirs.id }"] div`)].find((one) => one.className.includes('pointer-fine:flex'))?.classList.contains('invisible'), 'its bar steps aside while its menu is open').toBe(true);
+
+        fire(menu()!.querySelector<HTMLButtonElement>('[data-item="reply"]')!, 'click');
+
+        await vi.waitFor(() => expect(menu()).toBeNull(), { timeout: 4000 });
+        expect(useChat().replyTo(room.id)?.id).toBe(theirs.id);
+
+        right(bubble(mine.id)!);
+        await vi.waitFor(() => expect(menu()).not.toBeNull(), { timeout: 4000 });
+
+        expect(offered(), 'a line of the reader’s').toEqual(['reply', 'copy', 'delete']);
+    });
+});

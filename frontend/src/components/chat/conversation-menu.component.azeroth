@@ -1,0 +1,15 @@
+import { useLocale } from '../../stores/locale.store.ts';
+import type { MenuPoint } from './actions.ts';
+import ContextMenu from './context-menu.component.azeroth';
+import { conversationActions } from './conversation-actions.ts';
+
+/** A conversation's menu at the pointer: what its held row's sheet offers. */
+export default component ConversationMenu(props: { conversationId: string; at: MenuPoint; onClose: () => void })
+{
+    const locale = useLocale();
+    const listed = conversationActions();
+
+    derived items = listed(props.conversationId);
+
+    <ContextMenu at={ props.at } label={ locale.t('chats.actions') } items={ items } onClose={ props.onClose } />
+}

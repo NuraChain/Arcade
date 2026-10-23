@@ -10,6 +10,8 @@ import SealNotice from '../chat/seal-notice.component.azeroth';
 import QuietNote from '../chat/quiet-note.component.azeroth';
 import DayDivider from '../chat/day-divider.component.azeroth';
 import MessageBubble from '../chat/message-bubble.component.azeroth';
+import MessageMenu from '../chat/message-menu.component.azeroth';
+import type { LineHandlers, MenuPoint } from '../chat/actions.ts';
 import Composer from '../chat/composer.component.azeroth';
 import ConfirmSheet from '../app/confirm-sheet.component.azeroth';
 import type { Message } from '../../data/chat.ts';
@@ -279,20 +281,26 @@ export default component TableChat(props: {
         }
     };
 
+    /** What can be done with a line at the table, for its sheet and its menu alike. */
+    const handlersOf = (message: Message): LineHandlers => ({
+        ...(quiet ? {} : { onReply: () => reply(message) }),
+        onDelete: () => void remove(message)
+    });
+
     const actions = (message: Message, pick?: boolean) =>
     {
         void import('../chat/message-actions.component.azeroth').then((module) => overlay.open(
             module.default,
-            {
-                message,
-                me: lobby.me(),
-                pick: pick === true,
-                onReact: (emoji: string) => react(message, emoji),
-                ...(quiet ? {} : { onReply: () => reply(message) }),
-                onDelete: () => void remove(message)
-            },
+            { message, me: lobby.me(), pick: pick === true, onReact: (emoji: string) => react(message, emoji), ...handlersOf(message) },
             { label: locale.t('chat.messageActions') }
         ));
+    };
+
+    state menu = null as { message: Message; at: MenuPoint; anchor: HTMLElement } | null;
+
+    const openMenu = (message: Message, at: MenuPoint, anchor: HTMLElement) =>
+    {
+        menu = { message, at, anchor };
     };
 
     derived replying = chat.replyTo(props.conversationId);
@@ -421,6 +429,7 @@ export default component TableChat(props: {
                                     last={ row.last }
                                     avatar
                                     onActions={ quiet ? undefined : actions }
+                                    onMenu={ quiet ? undefined : openMenu }
                                     onReply={ quiet ? undefined : reply }
                                     onReact={ quiet ? undefined : react }
                                     onRetry={ retry }
@@ -428,6 +437,7 @@ export default component TableChat(props: {
                                     quoteOf={ quoteOf }
                                     onJump={ jump }
                                     replying={ replying?.id === row.message.id }
+                                    menued={ menu?.message.id === row.message.id }
                                 />
                             </li>
                         </For>
@@ -581,6 +591,18 @@ export default component TableChat(props: {
                     </For>
                 </ul>
             }
+        </Show>
+
+        <Show when={ menu } let={ open }>
+            <MessageMenu
+                at={ open.at }
+                anchor={ open.anchor }
+                message={ open.message }
+                me={ lobby.me() }
+                handlers={ handlersOf(open.message) }
+                onReact={ (emoji: string) => react(open.message, emoji) }
+                onClose={ () => menu = null }
+            />
         </Show>
     </section>
 }

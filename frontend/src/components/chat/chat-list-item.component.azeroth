@@ -8,17 +8,29 @@ import Icon from '../../icons/icon.component.azeroth';
 import { usePeople } from '../../stores/people.store.ts';
 import { useChat } from '../../stores/chat.store.ts';
 import { useCatalogue } from '../../stores/catalogue.store.ts';
+import { useDevice } from '../../stores/device.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useSocial } from '../../stores/social.store.ts';
 import { useGroups } from '../../stores/groups.store.ts';
 import Badge from '../ui/badge.component.azeroth';
 import Tooltip from '../ui/tooltip.component.azeroth';
+import type { MenuPoint } from './actions.ts';
 import ChatFace from './chat-face.component.azeroth';
 import { gameNameOf, groupNameOf, titleOf } from './chat-title.ts';
 import { plainOf } from '../../lib/markdown.ts';
 import { STATUS_ICON, STATUS_WORDS } from './status.ts';
 
-export default component ChatListItem(props: { conversation: Conversation; me: string; active?: boolean; folded?: boolean; onHold?: () => void })
+export default component ChatListItem(props: {
+    conversation: Conversation;
+    me: string;
+    active?: boolean;
+    folded?: boolean;
+    onHold?: () => void;
+    onMenu?: (at: MenuPoint) => void;
+
+    /** Its menu is open, so the row is marked as the one it acts on. */
+    menued?: boolean;
+})
 {
     const locale = useLocale();
     const catalogue = useCatalogue();
@@ -28,6 +40,7 @@ export default component ChatListItem(props: { conversation: Conversation; me: s
     const chat = useChat();
     const groups = useGroups();
     const people = usePeople();
+    const device = useDevice();
 
     let row: HTMLElement | null = null;
 
@@ -39,6 +52,18 @@ export default component ChatListItem(props: { conversation: Conversation; me: s
         }
         return attachHold(row, () => props.onHold?.());
     }
+
+    /** A right click opens the conversation's menu at the pointer; a finger holds the row for its sheet. */
+    const menu = (event: MouseEvent) =>
+    {
+        if (props.onMenu === undefined || device.coarse())
+        {
+            return;
+        }
+
+        event.preventDefault();
+        props.onMenu({ x: event.clientX, y: event.clientY });
+    };
 
     const nameOf = (handle: string) =>
     {
@@ -93,7 +118,7 @@ export default component ChatListItem(props: { conversation: Conversation; me: s
         return last.from === props.me ? `${ locale.t('chats.you') }${ body }` : body;
     })();
 
-    <span ref={ (element) => row = element } class="contents">
+    <span ref={ (element) => row = element } class="contents" onContextMenu={ menu }>
         <Link
             to={ `/app/chats/${ props.conversation.id }` }
             class={ () => [
@@ -102,7 +127,7 @@ export default component ChatListItem(props: { conversation: Conversation; me: s
                     : 'flex min-h-16 items-center gap-3 rounded-tile px-2 py-2.5',
                 'transition-colors duration-150 hover:bg-raised/60',
                 props.onHold === undefined ? '' : 'holdable',
-                props.active === true ? 'bg-raised' : ''
+                props.active === true ? 'bg-raised' : (props.menued === true ? 'bg-raised/60' : '')
             ].filter(Boolean).join(' ') }
             aria-label={ folded ? title : undefined }
             data-face={ folded ? '' : undefined }

@@ -1,0 +1,196 @@
+import { Portal } from 'azerothjs';
+
+import Icon from '../../icons/icon.component.azeroth';
+import { place, viewportOf, type Placed } from '../../lib/anchor.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import { flips, type ChatAction, type MenuPoint, type MenuReactions } from './actions.ts';
+
+/**
+ * A menu at the pointer, as a desktop's right click opens one: placed from the point it was asked
+ * at, and kept on the screen. Arrows move through it (left and right as the page reads), Home and
+ * End go to its ends, Escape closes it and gives the keyboard back, and a press anywhere else, a
+ * scroll, a resize or the window losing focus closes it. A choice closes it before it runs.
+ */
+export default component ContextMenu(props: {
+    at: MenuPoint;
+    label: string;
+    items: ChatAction[];
+    reactions?: MenuReactions;
+    onClose: () => void;
+})
+{
+    const locale = useLocale();
+
+    state at = { x: -9999, y: -9999, side: 'bottom', align: 'start', arrow: 0 } as Placed;
+
+    state placed = false;
+
+    let panel: HTMLElement | null = null;
+
+    const back = typeof document === 'undefined' ? null : document.activeElement;
+
+    const choices = () => (panel === null ? [] : [...panel.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')]);
+
+    const close = (restore: boolean) =>
+    {
+        props.onClose();
+
+        if (restore && back instanceof HTMLElement && back.isConnected)
+        {
+            back.focus({ preventScroll: true });
+        }
+    };
+
+    const choose = (run: () => void) =>
+    {
+        close(false);
+        run();
+    };
+
+    const key = (event: KeyboardEvent) =>
+    {
+        if (event.key === 'Escape')
+        {
+            event.preventDefault();
+            event.stopPropagation();
+            close(true);
+            return;
+        }
+
+        if (event.key === 'Tab')
+        {
+            close(false);
+            return;
+        }
+
+        const all = choices();
+        const here = all.indexOf(document.activeElement as HTMLButtonElement);
+        const behind = locale.dir() === 'rtl' ? 1 : -1;
+        const moves: Record<string, number> = {
+            ArrowDown: here + 1,
+            ArrowUp: here - 1,
+            ArrowRight: here - behind,
+            ArrowLeft: here + behind,
+            Home: 0,
+            End: all.length - 1
+        };
+        const to = moves[event.key];
+
+        if (to === undefined || all.length === 0)
+        {
+            return;
+        }
+
+        event.preventDefault();
+        all[((to % all.length) + all.length) % all.length].focus({ preventScroll: true });
+    };
+
+    mount
+    {
+        const settle = () =>
+        {
+            if (panel === null)
+            {
+                return;
+            }
+
+            const rtl = locale.dir() === 'rtl';
+
+            at = place(
+                { x: props.at.x, y: props.at.y, width: 0, height: 0 },
+                { width: panel.offsetWidth, height: panel.offsetHeight },
+                viewportOf(),
+                { side: 'bottom', align: rtl ? 'end' : 'start', gap: 2, padding: 8, rtl }
+            );
+            placed = true;
+            (panel.querySelector<HTMLButtonElement>('[data-item]') ?? choices()[0])?.focus({ preventScroll: true });
+        };
+
+        const frame = requestAnimationFrame(settle);
+
+        const outside = (event: PointerEvent) =>
+        {
+            if (!(event.target instanceof Node) || panel?.contains(event.target) !== true)
+            {
+                close(false);
+            }
+        };
+
+        const away = () => close(false);
+
+        document.addEventListener('pointerdown', outside, true);
+        window.addEventListener('scroll', away, true);
+        window.addEventListener('resize', away);
+        window.addEventListener('blur', away);
+
+        return () =>
+        {
+            cancelAnimationFrame(frame);
+            document.removeEventListener('pointerdown', outside, true);
+            window.removeEventListener('scroll', away, true);
+            window.removeEventListener('resize', away);
+            window.removeEventListener('blur', away);
+        };
+    }
+
+    <Portal>
+        <div class="anchor-root fixed inset-0 z-(--z-anchor) pointer-events-none">
+            <div
+                ref={ (element) => panel = element }
+                role="menu"
+                aria-label={ props.label }
+                class={ () => [
+                    'pointer-events-auto absolute min-w-52 max-w-[calc(100vw-1rem)] rounded-panel border border-line-strong bg-lifted p-1.5 shadow-2xl shadow-black/50 transition-[opacity,scale] duration-100 ease-out motion-reduce:transition-none',
+                    at.side === 'top' ? 'origin-bottom' : 'origin-top',
+                    placed ? 'scale-100 opacity-100' : 'scale-95 opacity-0'
+                ].join(' ') }
+                style={ `left: ${ at.x }px; top: ${ at.y }px` }
+                onKeyDown={ key }
+                onContextMenu={ (event: MouseEvent) => event.preventDefault() }
+            >
+                <Show when={ props.reactions } let={ react }>
+                    <div class="mb-1 flex items-center gap-0.5 border-b border-line pb-1.5" role="group" aria-label={ locale.t('chat.react') }>
+                        <For each={ [...react.emoji] } key={ (emoji) => emoji } let={ emoji }>
+                            <button
+                                type="button"
+                                role="menuitem"
+                                class={ () => [
+                                    'flex h-9 w-9 cursor-pointer items-center justify-center rounded-control text-ui-lg transition-transform hover:scale-110 hover:bg-raised focus-visible:bg-raised motion-reduce:transition-none motion-reduce:hover:scale-100',
+                                    react.mine(emoji) ? 'bg-accent/20' : ''
+                                ].filter(Boolean).join(' ') }
+                                aria-label={ locale.t('chat.reactWith', { emoji: emoji }) }
+                                onClick={ () => choose(() => react.pick(emoji)) }
+                            >
+                                { emoji }
+                            </button>
+                        </For>
+                        <button
+                            type="button"
+                            role="menuitem"
+                            class="flex h-9 w-9 cursor-pointer items-center justify-center rounded-control text-muted transition-colors hover:bg-raised hover:text-text focus-visible:bg-raised"
+                            aria-label={ locale.t('chat.moreReactions') }
+                            onClick={ () => choose(react.more) }
+                        >
+                            <Icon name="react" size={ 18 } />
+                        </button>
+                    </div>
+                </Show>
+                <For each={ props.items } key={ (item) => item.id } let={ item }>
+                    <button
+                        type="button"
+                        role="menuitem"
+                        data-item={ item.id }
+                        class={ () => [
+                            'flex h-9 w-full cursor-pointer items-center gap-3 rounded-control px-3 text-start text-ui-sm transition-colors hover:bg-raised focus-visible:bg-raised',
+                            item.danger === true ? 'text-danger' : 'text-text'
+                        ].join(' ') }
+                        onClick={ () => choose(item.run) }
+                    >
+                        <Icon name={ item.icon } size={ 16 } class={ flips(item.icon) ? 'icon-flip' : undefined } />
+                        { item.label }
+                    </button>
+                </For>
+            </div>
+        </div>
+    </Portal>
+}

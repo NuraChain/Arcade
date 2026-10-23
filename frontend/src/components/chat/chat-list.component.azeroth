@@ -1,8 +1,10 @@
 import type { GameId } from '../../data/games.ts';
 
+import type { MenuPoint } from './actions.ts';
 import ChatActions from './chat-actions.component.azeroth';
 import ChatListItem from './chat-list-item.component.azeroth';
 import { gameNameOf, groupNameOf, titleOf } from './chat-title.ts';
+import ConversationMenu from './conversation-menu.component.azeroth';
 import EmptyState from '../ui/empty-state.component.azeroth';
 import IconButton from '../ui/icon-button.component.azeroth';
 import LoadMore from '../ui/load-more.component.azeroth';
@@ -41,6 +43,7 @@ export default component ChatList(props: { active?: string; pane?: boolean; fold
 
     state tab = props.pane === true ? kept.tab : 'all';
     state query = '';
+    state menu = null as { id: string; at: MenuPoint } | null;
 
     let scroller: HTMLElement | null = null;
 
@@ -179,6 +182,8 @@ export default component ChatList(props: { active?: string; pane?: boolean; fold
                                         active={ conversation.id === props.active }
                                         folded={ folded }
                                         onHold={ () => overlay.open(ChatActions, { conversationId: conversation.id }, { label: locale.t('chats.actions') }) }
+                                        onMenu={ (at: MenuPoint) => menu = { id: conversation.id, at } }
+                                        menued={ menu?.id === conversation.id }
                                     />
                                 </li>
                             </For>
@@ -233,5 +238,9 @@ export default component ChatList(props: { active?: string; pane?: boolean; fold
                 </Match>
             </Switch>
         </div>
+
+        <Show when={ menu } let={ open }>
+            <ConversationMenu conversationId={ open.id } at={ open.at } onClose={ () => menu = null } />
+        </Show>
     </div>
 }

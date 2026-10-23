@@ -7,6 +7,8 @@ import { usePeople } from '../../stores/people.store.ts';
 import { useCatalogue } from '../../stores/catalogue.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { attachHold } from '../../lib/hold.ts';
+import { boxOf } from '../../lib/anchor.ts';
+import { fitBar } from '../../lib/hover-bar.ts';
 import { aboutPerson } from '../../lib/person-menu.ts';
 import { attachSwipeReply } from '../../lib/swipe-reply.ts';
 import { QUICK_REACTIONS } from '../../data/emoji.ts';
@@ -24,6 +26,7 @@ import ReactionRow from './reaction-row.component.azeroth';
 import RichText from './rich-text.component.azeroth';
 import { jumboOf } from '../../lib/markdown-dom.ts';
 import { STATUS_ICON, STATUS_WORDS } from './status.ts';
+import type { MenuPoint } from './actions.ts';
 
 const LOCKED: Record<MessageLock, MessageKey> = {
     'unknown-sender': 'locked.unknownSender',
@@ -48,6 +51,7 @@ export default component MessageBubble(props: {
     last?: boolean;
     avatar?: boolean;
     onActions?: (message: Message, pick?: boolean) => void;
+    onMenu?: (message: Message, at: MenuPoint, anchor: HTMLElement) => void;
     onReply?: (message: Message) => void;
     onReact?: (message: Message, emoji: string) => void;
     onRetry?: (message: Message) => void;
@@ -55,6 +59,9 @@ export default component MessageBubble(props: {
     quoteOf?: (id: string) => Message | undefined;
     onJump?: (id: string) => void;
     replying?: boolean;
+
+    /** Its menu is open, and the bar beside it steps aside so that the two do not stand on each other. */
+    menued?: boolean;
 })
 {
     const locale = useLocale();
@@ -126,6 +133,49 @@ export default component MessageBubble(props: {
         }
 
         pop.toggle({ anchor, pick: (emoji) => props.onReact?.(props.message, emoji), side: 'top', align: mine ? 'end' : 'start', keep: false });
+    };
+
+    /** Lays the hover bar where the thread has room for it, measured each time it is about to show. */
+    const fit = () =>
+    {
+        const bar = toolbar;
+        const column = bar?.parentElement ?? null;
+
+        if (bar === null || column === null || row === null)
+        {
+            return;
+        }
+
+        const pane = row.closest('.overflow-y-auto');
+        const place = fitBar(
+            boxOf(row),
+            boxOf(column),
+            { width: bar.offsetWidth, height: bar.offsetHeight },
+            { mine, rtl: locale.dir() === 'rtl', top: pane === null ? 0 : pane.getBoundingClientRect().top }
+        );
+
+        bar.style.left = `${ Math.round(place.x) }px`;
+        bar.style.top = `${ Math.round(place.y) }px`;
+    };
+
+    /** A right click opens the line's menu at the pointer, except on a link or a selection, which the browser's own menu serves. */
+    const menu = (event: MouseEvent) =>
+    {
+        if (props.onMenu === undefined || !typed || locked !== null || !settled || device.coarse() || row === null)
+        {
+            return;
+        }
+
+        const link = event.target instanceof Element ? event.target.closest('a') : null;
+        const chosen = window.getSelection();
+
+        if (link !== null || (chosen !== null && !chosen.isCollapsed && row.contains(chosen.anchorNode)))
+        {
+            return;
+        }
+
+        event.preventDefault();
+        props.onMenu(props.message, { x: event.clientX, y: event.clientY }, row);
     };
 
     mount
@@ -301,7 +351,7 @@ export default component MessageBubble(props: {
         }
     >
         { () =>
-            <div ref={ (element) => row = element } class={ () => [ 'group/row relative flex w-full touch-pan-y items-end gap-2', mine ? 'flex-row-reverse' : '' ].filter(Boolean).join(' ') } data-message={ props.message.id }>
+            <div ref={ (element) => row = element } class={ () => [ 'group/row relative flex w-full touch-pan-y items-end gap-2', mine ? 'flex-row-reverse' : '' ].filter(Boolean).join(' ') } data-message={ props.message.id } onContextMenu={ menu } onPointerEnter={ fit } onFocusIn={ fit }>
                 <Show when={ props.onReply !== undefined }>
                     { () =>
                         <span ref={ (element) => cue = element } class="pointer-events-none absolute end-1 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-raised text-accent opacity-0" aria-hidden="true">
@@ -413,9 +463,9 @@ export default component MessageBubble(props: {
                             <div
                                 ref={ (element) => toolbar = element }
                                 class={ () => [
-                                    'absolute -top-10 z-10 hidden items-center gap-0.5 rounded-full border border-line-strong bg-lifted p-0.5 shadow-lg shadow-black/30 opacity-0 transition-opacity duration-150 group-hover/row:opacity-100 focus-within:opacity-100 pointer-fine:flex motion-reduce:transition-none @min-[32rem]/thread:top-1/2 @min-[32rem]/thread:-translate-y-1/2',
-                                    pop.current()?.anchor === toolbar && toolbar !== null ? 'opacity-100' : '',
-                                    mine ? 'end-0 @min-[32rem]/thread:end-full @min-[32rem]/thread:me-2' : 'start-0 @min-[32rem]/thread:start-full @min-[32rem]/thread:ms-2'
+                                    'pointer-events-none absolute left-0 top-0 z-10 hidden w-max items-center gap-0.5 rounded-full border border-line-strong bg-lifted p-0.5 shadow-lg shadow-black/30 opacity-0 transition-opacity duration-150 before:absolute before:-inset-2 before:-z-10 group-hover/row:pointer-events-auto group-hover/row:opacity-100 focus-within:pointer-events-auto focus-within:opacity-100 pointer-fine:flex motion-reduce:transition-none',
+                                    pop.current()?.anchor === toolbar && toolbar !== null ? 'pointer-events-auto opacity-100' : '',
+                                    props.menued === true ? 'invisible' : ''
                                 ].filter(Boolean).join(' ') }
                             >
                                 <Show when={ props.onReact !== undefined }>

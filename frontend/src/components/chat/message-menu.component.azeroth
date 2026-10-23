@@ -1,0 +1,38 @@
+import type { Message } from '../../data/chat.ts';
+import { QUICK_REACTIONS } from '../../data/emoji.ts';
+import { useEmojiPop } from '../../stores/emoji-pop.store.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import { messageActions, type LineHandlers, type MenuPoint } from './actions.ts';
+import ContextMenu from './context-menu.component.azeroth';
+
+/** A line's menu at the pointer: its reactions, then what its sheet offers, in the same order. */
+export default component MessageMenu(props: {
+    at: MenuPoint;
+    anchor: HTMLElement;
+    handlers: LineHandlers;
+    message: Message;
+    me: string;
+    onReact: (emoji: string) => void;
+    onClose: () => void;
+})
+{
+    const locale = useLocale();
+    const pop = useEmojiPop();
+
+    derived items = messageActions(locale.t, props.message, props.me, props.handlers);
+
+    const reactions = {
+        emoji: QUICK_REACTIONS,
+        mine: (emoji: string) => (props.message.reactions ?? []).some((one) => one.from === props.me && one.emoji === emoji),
+        pick: (emoji: string) => props.onReact(emoji),
+        more: () => pop.toggle({
+            anchor: props.anchor,
+            pick: (emoji) => props.onReact(emoji),
+            side: 'top',
+            align: props.message.from === props.me ? 'end' : 'start',
+            keep: false
+        })
+    };
+
+    <ContextMenu at={ props.at } label={ locale.t('chat.messageActions') } items={ items } reactions={ reactions } onClose={ props.onClose } />
+}

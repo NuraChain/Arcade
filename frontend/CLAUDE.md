@@ -340,6 +340,39 @@ what would be lost is the reader's place, and the pane keeps its tab and its scr
 memory for exactly that. It deliberately does not keep the search text: a query over message previews
 is a fragment of what was said, and module memory outlives a sign-out.
 
+**A desktop answers a right click, and the bar beside a line stays in the pane.** A right click
+on a line opens a menu at the pointer (`MessageMenu`): its reactions in a row, then what the
+line's sheet offers in the sheet's order, from the one list both draw (`messageActions` in
+`components/chat/actions.ts`): Reply, Copy, Forward, About the sender on somebody else's line and
+Delete on the reader's own. A right click on a conversation in the list opens what its held row's
+sheet offers (`ConversationMenu`, from `conversationActions`). Each host (the chat page, a table's
+chat) builds a line's handlers once (`handlersOf`) for its sheet and its menu alike, so a table
+offers Reply, Copy and Delete in both and never Forward. `ContextMenu` is the menu: placed from the
+pointer and kept on the screen (ending at the pointer for a Persian reader), the keyboard on its
+first action, the arrows through it (left and right as the page reads, round at the ends), Home and
+End; Escape closes it and gives the keyboard back, Tab closes it, and so does a press anywhere
+else, a scroll, a resize or the window losing focus; a choice closes it before it runs. A finger
+keeps its held press and its sheet, so nothing opens on `contextmenu` under a coarse pointer; nor
+on a link or on words chosen in the line, which are the browser's own menu's; nor on a line still
+on its way, one this browser could not open or one the server wrote.
+
+The hover bar a pointer finds beside a line stood at the line's far edge whatever its width, so
+beside a wide line it ran out of the pane (at 1280 a 518px line left Reply and More outside it).
+`fitBar` (`lib/hover-bar.ts`) places it each time it is about to show, as a pointer enters the row
+or the keyboard reaches it: beside the line on the side with more room when that side holds the
+bar and a gap, otherwise over the line's top edge from the side away from its sender (a run of one
+sender's lines is drawn along that sender's side, so the far side is where the lines above leave
+room: from the sender's own side it lay over the short line above), under it where the thread's
+top would cut it, and always inside the row. While a line's menu is open its bar steps aside
+(`menued`), and a conversation whose menu is open is marked in the list. The measures are physical, so it
+is placed with `left` and `top` whichever way the page reads. It takes the pointer only while its
+line is hovered or holds the keyboard (`pointer-events-none` otherwise), with a bridge of 8px round
+it so the pointer can cross the gap to it without leaving the line: a bar nobody can see still took
+the pointer, and the walk found one lying over its own line before it was first placed, where it
+took the hover and the press meant for the line. `context-menu.spec.ts`,
+`hover-bar.spec.ts`, `bubble.spec.ts` (*a right click on a line*), `chat-page.spec.ts` (*a right
+click, on a line and on a conversation*) and `table-chat.spec.ts` hold it.
+
 **One bubble, one grouping rule, two places.** `MessageBubble` draws the chat page AND the table's
 panel, and `lib/thread.ts` decides both: a run is one sender's `text` lines no more than five minutes
 apart on one day, a server line never joins a run, and a day divider leads the first line of every

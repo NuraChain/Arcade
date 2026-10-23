@@ -19,6 +19,8 @@ import OpenHereSheet from '../../components/games/open-here-sheet.component.azer
 import PersonActions from '../../components/social/person-actions.component.azeroth';
 import ConfirmSheet from '../../components/app/confirm-sheet.component.azeroth';
 import ForwardSheet from '../../components/chat/forward-sheet.component.azeroth';
+import MessageMenu from '../../components/chat/message-menu.component.azeroth';
+import type { LineHandlers, MenuPoint } from '../../components/chat/actions.ts';
 import type { Message } from '../../data/chat.ts';
 import { plainOf } from '../../lib/markdown.ts';
 import { attempt } from '../../lib/attempt.ts';
@@ -561,38 +563,42 @@ export default component ChatPage()
         }
     };
 
+    /** What can be done with a line here, for its sheet and its menu alike. */
+    const handlersOf = (message: Message): LineHandlers => ({
+        ...(quiet ? {} : { onReply: () => reply(message) }),
+        onForward: () => overlay.open(ForwardSheet, { message }, { label: locale.t('chat.forwardTitle') }),
+        onDelete: () => void remove(message),
+        onPerson: () => overlay.open(
+            PersonActions,
+            {
+                personId: message.from,
+                ...(message.frankingKey === undefined ? {} : {
+                    disclose: {
+                        conversationId: message.conversationId,
+                        messageId: message.id,
+                        text: message.plain ?? message.text,
+                        frankingKey: message.frankingKey
+                    }
+                })
+            },
+            { label: locale.t('actions.title') }
+        )
+    });
+
     const actions = (message: Message, pick?: boolean) =>
     {
-        const talk = !quiet;
-
         void import('../../components/chat/message-actions.component.azeroth').then((module) => overlay.open(
             module.default,
-            {
-                message,
-                me,
-                pick: pick === true,
-                onReact: (emoji: string) => react(message, emoji),
-                ...(talk ? { onReply: () => reply(message) } : {}),
-                onForward: () => overlay.open(ForwardSheet, { message }, { label: locale.t('chat.forwardTitle') }),
-                onDelete: () => void remove(message),
-                onPerson: () => overlay.open(
-                    PersonActions,
-                    {
-                        personId: message.from,
-                        ...(message.frankingKey === undefined ? {} : {
-                            disclose: {
-                                conversationId: message.conversationId,
-                                messageId: message.id,
-                                text: message.plain ?? message.text,
-                                frankingKey: message.frankingKey
-                            }
-                        })
-                    },
-                    { label: locale.t('actions.title') }
-                )
-            },
+            { message, me, pick: pick === true, onReact: (emoji: string) => react(message, emoji), ...handlersOf(message) },
             { label: locale.t('chat.messageActions') }
         ));
+    };
+
+    state menu = null as { message: Message; at: MenuPoint; anchor: HTMLElement } | null;
+
+    const openMenu = (message: Message, at: MenuPoint, anchor: HTMLElement) =>
+    {
+        menu = { message, at, anchor };
     };
 
     const startGame = () =>
@@ -721,6 +727,7 @@ export default component ChatPage()
                                                             last={ row.last }
                                                             avatar={ crowd }
                                                             onActions={ actions }
+                                                            onMenu={ openMenu }
                                                             onReply={ quiet ? undefined : reply }
                                                             onReact={ quiet ? undefined : react }
                                                             onRetry={ retry }
@@ -728,6 +735,7 @@ export default component ChatPage()
                                                             quoteOf={ quoteOf }
                                                             onJump={ jump }
                                                             replying={ chat.replyTo(id)?.id === row.message.id }
+                                                            menued={ menu?.message.id === row.message.id }
                                                         />
                                                     </div>
                                                 </For>
@@ -847,6 +855,18 @@ export default component ChatPage()
                     }
                 </Show>
             </section>
+
+            <Show when={ menu } let={ open }>
+                <MessageMenu
+                    at={ open.at }
+                    anchor={ open.anchor }
+                    message={ open.message }
+                    me={ me }
+                    handlers={ handlersOf(open.message) }
+                    onReact={ (emoji: string) => react(open.message, emoji) }
+                    onClose={ () => menu = null }
+                />
+            </Show>
         </div>
     </Page>
 }

@@ -4,6 +4,7 @@ import { RouterProvider, Routes, createMemoryHistory, createRouter, type Route }
 
 import ChatPage from '../src/pages/app/chat.page.azeroth';
 import ChatsPage from '../src/pages/app/chats.page.azeroth';
+import { QUICK_REACTIONS } from '../src/data/emoji.ts';
 import { manualClock } from '../src/lib/clock.ts';
 import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
 import '../src/locales/app-catalogue.ts';
@@ -905,5 +906,134 @@ describe('where a thread opens, and the way back to its end', () =>
             media.mockRestore();
             restore();
         }
+    });
+});
+
+describe('a right click, on a line and on a conversation', () =>
+{
+    const menu = () => document.querySelector<HTMLElement>('[role="menu"]');
+
+    const item = (id: string) => menu()?.querySelector<HTMLButtonElement>(`[data-item="${ id }"]`) ?? null;
+
+    const offered = () => [...(menu()?.querySelectorAll('[data-item]') ?? [])].map((one) => one.getAttribute('data-item'));
+
+    const bar = (id: string) => [...document.querySelectorAll<HTMLElement>(`[data-message="${ id }"] div`)].find((one) => one.className.includes('pointer-fine:flex'));
+
+    const right = (target: Element) =>
+    {
+        const event = new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 300, clientY: 200 });
+
+        target.dispatchEvent(event);
+        return event;
+    };
+
+    const spoken = (by: (from: string | undefined) => boolean) =>
+    {
+        const thread = server.conversations.find((row) => row.kind === 'direct' && server.messages.some((one) => one.conversationId === row.id && one.kind === 'text' && by(one.from)))!;
+        const line = server.messages.filter((one) => one.conversationId === thread.id && one.kind === 'text' && by(one.from)).at(-1)!;
+
+        return { thread, line };
+    };
+
+    afterEach(() =>
+    {
+        useDevice().overrideCoarse(null);
+        useOverlay().reset();
+    });
+
+    it('opens what a line of theirs offers at the pointer, the reactions first, and a choice does it', async () =>
+    {
+        const { thread, line } = spoken((from) => from !== 'alex');
+        const container = opened(thread.id, 'sidebar');
+        const bubble = () => container.querySelector(`[data-message="${ line.id }"] .bubble`);
+
+        await vi.waitFor(() => expect(bubble()).not.toBeNull(), { timeout: 4000 });
+
+        expect(right(bubble()!).defaultPrevented, 'the browser’s own menu is kept off').toBe(true);
+
+        await vi.waitFor(() => expect(item('reply')).not.toBeNull(), { timeout: 4000 });
+
+        expect(offered()).toEqual(['reply', 'copy', 'forward', 'person']);
+        expect(menu()!.querySelector(`[aria-label="${ useLocale().t('chat.reactWith', { emoji: QUICK_REACTIONS[0] }) }"]`)).not.toBeNull();
+        expect(useOverlay().items(), 'a menu, not a sheet').toHaveLength(0);
+        expect(bar(line.id)?.classList.contains('invisible'), 'the line’s bar steps aside while its menu is open').toBe(true);
+
+        fire(item('reply')!, 'click');
+
+        await vi.waitFor(() => expect(menu()).toBeNull(), { timeout: 4000 });
+
+        expect(useChat().replyTo(thread.id)?.id).toBe(line.id);
+        await vi.waitFor(() => expect(bar(line.id)?.classList.contains('invisible'), 'and is back once it is shut').toBe(false), { timeout: 4000 });
+    });
+
+    it('offers to delete a line of the reader’s own, and asks first', async () =>
+    {
+        const { thread, line } = spoken((from) => from === 'alex');
+        const container = opened(thread.id, 'sidebar');
+        const bubble = () => container.querySelector(`[data-message="${ line.id }"] .bubble`);
+
+        await vi.waitFor(() => expect(bubble()).not.toBeNull(), { timeout: 4000 });
+
+        right(bubble()!);
+
+        await vi.waitFor(() => expect(item('delete')).not.toBeNull(), { timeout: 4000 });
+
+        expect(offered()).toEqual(['reply', 'copy', 'forward', 'delete']);
+
+        fire(item('delete')!, 'click');
+
+        await vi.waitFor(() => expect(useOverlay().items()).toHaveLength(1), { timeout: 4000 });
+
+        expect(useOverlay().items()[0].props).toMatchObject({ destructive: true });
+        expect(menu()).toBeNull();
+    });
+
+    it('opens what a conversation offers when its row in the list beside the thread is right-clicked', async () =>
+    {
+        const thread = server.conversations.find((row) => row.kind === 'direct')!;
+        const other = server.conversations.find((row) => row.id !== thread.id)!;
+        const container = opened(thread.id, 'sidebar');
+        const row = () => container.querySelector(`aside a[href="/app/chats/${ other.id }"]`);
+        const pinned = () => useChat().pinned(other.id);
+
+        await vi.waitFor(() => expect(row()).not.toBeNull(), { timeout: 4000 });
+
+        const before = pinned();
+
+        expect(right(row()!).defaultPrevented).toBe(true);
+
+        await vi.waitFor(() => expect(item('pin')).not.toBeNull(), { timeout: 4000 });
+
+        expect(menu()!.getAttribute('aria-label')).toBe(useLocale().t('chats.actions'));
+        expect(offered().slice(0, 3)).toEqual(['pin', 'mute', 'expiry']);
+        expect(row()!.className, 'the row the menu acts on is marked').toContain('bg-raised/60');
+        expect([...container.querySelectorAll('aside li a')].filter((one) => one.className.split(/\s+/).includes('bg-raised/60')), 'and no other').toHaveLength(1);
+
+        fire(item('pin')!, 'click');
+
+        await vi.waitFor(() => expect(pinned()).toBe(!before), { timeout: 4000 });
+
+        expect(menu()).toBeNull();
+        expect(row()!.className.split(/\s+/), 'unmarked once it is shut').not.toContain('bg-raised/60');
+    });
+
+    it('leaves a finger to its held press, on a line and on a conversation', async () =>
+    {
+        useDevice().overrideCoarse(true);
+
+        const { thread, line } = spoken((from) => from !== 'alex');
+        const container = opened(thread.id, 'sidebar');
+        const bubble = () => container.querySelector(`[data-message="${ line.id }"] .bubble`);
+        const row = () => container.querySelector('aside a[href^="/app/chats/"]');
+
+        await vi.waitFor(() => expect(bubble()).not.toBeNull(), { timeout: 4000 });
+        await vi.waitFor(() => expect(row()).not.toBeNull(), { timeout: 4000 });
+
+        expect(right(bubble()!).defaultPrevented, 'a line').toBe(false);
+        expect(right(row()!).defaultPrevented, 'a conversation').toBe(false);
+
+        await settle();
+
+        expect(menu()).toBeNull();
     });
 });

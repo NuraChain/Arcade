@@ -7,6 +7,7 @@ import type { Message } from '../src/data/chat.ts';
 import { manualClock, type ManualClock } from '../src/lib/clock.ts';
 import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
 import { routes } from '../src/routes.ts';
+import { useDevice } from '../src/stores/device.store.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
 import '../src/locales/app-catalogue.ts';
 
@@ -453,5 +454,172 @@ describe('a line of the reader’s on its way', () =>
 
         expect(container.querySelector('[data-message]'), 'drawn again as it landed').toBe(row);
         expect(container.querySelector('time [data-status]')?.getAttribute('data-status')).toBe('sent');
+    });
+});
+
+describe('a right click on a line, and the bar a pointer finds beside it', () =>
+{
+    const menued = (message: Message) =>
+    {
+        const asked: Array<{ id: string; at: { x: number; y: number }; anchor: HTMLElement }> = [];
+        const router = createRouter({ routes, history: createMemoryHistory('/app/chats/c-1'), scroll: false });
+        const container = renderTest(() => RouterProvider({
+            router,
+            children: () => MessageBubble({
+                message,
+                me: 'alex',
+                onActions: () => undefined,
+                onReply: () => undefined,
+                onReact: () => undefined,
+                onMenu: (one: Message, at: { x: number; y: number }, anchor: HTMLElement) => asked.push({ id: one.id, at, anchor })
+            })
+        }) as Rendered).container;
+
+        return { container, asked };
+    };
+
+    const right = (target: Element) =>
+    {
+        const event = new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 120, clientY: 240 });
+
+        target.dispatchEvent(event);
+        return event;
+    };
+
+    const boxed = (element: Element, left: number, top: number, width: number, height: number) =>
+    {
+        Object.defineProperty(element, 'getBoundingClientRect', {
+            configurable: true,
+            value: () => ({ left, top, width, height, right: left + width, bottom: top + height, x: left, y: top })
+        });
+    };
+
+    afterEach(() =>
+    {
+        useDevice().overrideCoarse(null);
+        vi.restoreAllMocks();
+    });
+
+    it('opens the line’s menu at the pointer, by the line, and keeps the browser’s own off it', () =>
+    {
+        const { container, asked } = menued(text('m-1', 'Up for a game?'));
+        const event = right(container.querySelector('.bubble')!);
+
+        expect(event.defaultPrevented).toBe(true);
+        expect(asked.map((one) => [one.id, one.at])).toEqual([['m-1', { x: 120, y: 240 }]]);
+        expect(asked[0].anchor).toBe(container.querySelector('[data-message="m-1"]'));
+    });
+
+    it('leaves a finger to its held press', () =>
+    {
+        useDevice().overrideCoarse(true);
+
+        const { container, asked } = menued(text('m-1', 'Up for a game?'));
+
+        expect(right(container.querySelector('.bubble')!).defaultPrevented).toBe(false);
+        expect(asked).toEqual([]);
+    });
+
+    it('leaves a link and words chosen in the line to the browser’s own menu', () =>
+    {
+        const { container, asked } = menued(text('m-1', 'see https://example.com/a'));
+        const bubble = container.querySelector('.bubble')!;
+
+        expect(right(bubble.querySelector('a')!).defaultPrevented, 'a link').toBe(false);
+
+        vi.spyOn(window, 'getSelection').mockReturnValue({ isCollapsed: false, anchorNode: bubble.firstChild } as unknown as Selection);
+        expect(right(bubble).defaultPrevented, 'words chosen in the line').toBe(false);
+
+        vi.spyOn(window, 'getSelection').mockReturnValue({ isCollapsed: false, anchorNode: document.body } as unknown as Selection);
+        expect(right(bubble).defaultPrevented, 'words chosen somewhere else').toBe(true);
+        expect(asked).toHaveLength(1);
+    });
+
+    it('offers nothing on a line still on its way, one this browser cannot open, or one the server wrote', () =>
+    {
+        const going = menued(text('mine', 'on its way', { from: 'alex', outgoing: 'sending' }));
+
+        expect(right(going.container.querySelector('.bubble')!).defaultPrevented, 'on its way').toBe(false);
+        cleanup();
+
+        const shut = menued(text('m-1', '', { locked: 'no-epoch-key' }));
+
+        expect(right(shut.container.querySelector('[data-message]')!).defaultPrevented, 'locked').toBe(false);
+        cleanup();
+
+        const written = menued({ ...text('m-2', ''), kind: 'system', line: { key: 'chat.line.group.joined', params: { who: 'sara.k' } } });
+
+        expect(right(written.container.querySelector('p')!).defaultPrevented, 'a line of the server’s').toBe(false);
+        expect([...going.asked, ...shut.asked, ...written.asked]).toEqual([]);
+    });
+
+    it('lets its bar take the pointer only while its line is hovered or holds the keyboard, with room round it to cross to it', () =>
+    {
+        const { container } = menued(text('m-1', 'Up for a game?'));
+        const bar = [...container.querySelectorAll<HTMLElement>('div')].find((one) => one.className.includes('pointer-fine:flex'))!;
+        const classes = bar.className.split(/\s+/);
+
+        expect(classes, 'a bar nobody can see covers no line').toContain('pointer-events-none');
+        expect(classes, 'and takes the pointer while its own line is hovered or holds the keyboard').toEqual(expect.arrayContaining(['group-hover/row:pointer-events-auto', 'focus-within:pointer-events-auto']));
+        expect(classes, 'a bridge over the gap between the line and the bar').toEqual(expect.arrayContaining(['before:absolute', 'before:-inset-2', 'before:-z-10']));
+    });
+
+    it('steps its bar aside while its menu is open, and keeps it', async () =>
+    {
+        const [open, setOpen] = createSignal(false);
+        const router = createRouter({ routes, history: createMemoryHistory('/app/chats/c-1'), scroll: false });
+        const container = renderTest(() => RouterProvider({
+            router,
+            children: () => MessageBubble({
+                message: text('m-1', 'Up for a game?'),
+                me: 'alex',
+                onActions: () => undefined,
+                onReply: () => undefined,
+                onReact: () => undefined,
+                onMenu: () => undefined,
+                get menued()
+                {
+                    return open();
+                }
+            })
+        }) as Rendered).container;
+        const bar = () => [...container.querySelectorAll<HTMLElement>('div')].find((one) => one.className.includes('pointer-fine:flex'))!;
+        const drawn = bar();
+
+        expect(drawn.classList.contains('invisible')).toBe(false);
+
+        setOpen(true);
+        await settle();
+
+        expect(bar().classList.contains('invisible'), 'aside while the menu is open').toBe(true);
+
+        setOpen(false);
+        await settle();
+
+        expect(bar().classList.contains('invisible'), 'back once it is shut').toBe(false);
+        expect(bar(), 'the same bar throughout').toBe(drawn);
+    });
+
+    it('lays its bar beside a line that leaves it room, and over one that does not', () =>
+    {
+        const { container } = menued(text('m-1', 'Up for a game?'));
+        const row = container.querySelector<HTMLElement>('[data-message]')!;
+        const bar = [...container.querySelectorAll<HTMLElement>('div')].find((one) => one.className.includes('pointer-fine:flex'))!;
+
+        expect(bar, 'the bar a pointer finds').toBeDefined();
+
+        Object.defineProperty(bar, 'offsetWidth', { configurable: true, value: 120 });
+        Object.defineProperty(bar, 'offsetHeight', { configurable: true, value: 36 });
+        boxed(row, 0, 100, 800, 60);
+        boxed(bar.parentElement!, 40, 110, 300, 40);
+
+        row.dispatchEvent(new Event('pointerenter'));
+
+        expect([bar.style.left, bar.style.top], 'beside the line').toEqual(['308px', '2px']);
+
+        boxed(bar.parentElement!, 40, 110, 700, 40);
+        bar.querySelector('button')!.dispatchEvent(new Event('focusin', { bubbles: true }));
+
+        expect([bar.style.left, bar.style.top], 'over the far end of a line too wide, found by the keyboard as well').toEqual(['580px', '-40px']);
     });
 });
