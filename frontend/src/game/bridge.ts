@@ -50,6 +50,9 @@ export interface BoardOptions
 
     sound: () => SoundHandle | null;
 
+    /** What the end of the game sounds like to whoever is reading, asked as it is shown. */
+    ending: () => 'win' | 'lose' | 'draw' | null;
+
     feel: (kind: Haptic) => void;
 
     onPick?: (key: string, keyed: boolean) => void;

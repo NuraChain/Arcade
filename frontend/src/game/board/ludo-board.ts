@@ -244,6 +244,7 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
     let shown: Shown = NOBODY;
     let matchId = '';
     let celebrated = '';
+    let ended = false;
     let movable: ReadonlySet<string> = new Set();
     let hints = true;
     let goals: readonly BoardGoal[] = [];
@@ -1154,6 +1155,24 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
         }
     };
 
+    /** Sounds the end of the game once, as it went for whoever reads it, whether or not anybody won. */
+    const close = () =>
+    {
+        if (ended)
+        {
+            return;
+        }
+
+        ended = true;
+
+        const sting = options.ending();
+
+        if (sting !== null)
+        {
+            options.sound()?.play(sting);
+        }
+    };
+
     const applaud = async (winners: readonly string[], ctx: Ctx) =>
     {
         const said = winners.join();
@@ -1170,7 +1189,7 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
             return;
         }
 
-        options.sound()?.play('win');
+        close();
 
         const flecks = celebrate(stage, { host: root, tones: winners.map((winner) => TONE[winner] ?? '#FFFFFF'), layer: Z_BURST });
 
@@ -1238,6 +1257,7 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
         }
 
         tell();
+        close();
         await applaud(moment.sight.view.winners, moment.ctx);
     };
 
@@ -1495,6 +1515,7 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
             shown = shownOf(sight.view);
             forget(shown);
             celebrated = sight.view.winners.join();
+            ended = false;
 
             const keys = new Set(shown.pawns.map((pawn) => pawn.key));
 

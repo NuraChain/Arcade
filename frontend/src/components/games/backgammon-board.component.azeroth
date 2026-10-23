@@ -661,6 +661,7 @@ export default component BackgammonBoard(props: { match: MatchView; events: Even
                 {
                     facts = now;
                 },
+                result: () => untrack(() => (mine === undefined ? undefined : game.players.find((one) => one.seat === mine)?.result)),
                 onPass: (side, faces) =>
                 {
                     const dice = locale.list(faces.map((face) => locale.n(face)));

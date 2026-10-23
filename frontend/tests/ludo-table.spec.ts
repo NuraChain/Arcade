@@ -30,7 +30,7 @@ import { client } from './fake-api.ts';
 import { socket } from './fake-realtime.ts';
 import { watchedBoxes } from './fake-boxes.ts';
 
-const sounds = vi.hoisted(() => ({ games: [] as string[] }));
+const sounds = vi.hoisted(() => ({ games: [] as string[], heard: [] as string[] }));
 
 vi.mock('../src/game/sound.ts', async (original) =>
 {
@@ -40,9 +40,18 @@ vi.mock('../src/game/sound.ts', async (original) =>
         ...real,
         createSound: (on: boolean, game?: Parameters<typeof real.createSound>[1]) =>
         {
+            const handle = real.createSound(on, game);
+
             sounds.games.push(game ?? 'none');
 
-            return real.createSound(on, game);
+            return {
+                ...handle,
+                play: (...args: Parameters<typeof handle.play>) =>
+                {
+                    sounds.heard.push(args[0]);
+                    handle.play(...args);
+                }
+            };
         }
     };
 });
@@ -764,6 +773,54 @@ describe('the ludo table, two against two', () =>
             cleanup();
             useBoard().close();
         }
+    });
+
+    it('sounds the end as it went for whoever reads it: the win, the loss, and a close for somebody watching', async () =>
+    {
+        quietly();
+
+        const ENDINGS = ['win', 'lose', 'draw'];
+        const ended = (results: MatchView['players'][number]['result'][]) => pairs({
+            rev: 2,
+            finishedAt: new Date(500_000).toISOString(),
+            outcome: 'won',
+            winner: 1,
+            players: SEATED.map((who, seat) => ({ seat, who, timeouts: 0, side: seat % 2, result: results[seat] }))
+        });
+        const heard = async (end: MatchView) =>
+        {
+            const [current, setCurrent] = createSignal(pairs({}));
+            const props = {
+                get match()
+                {
+                    return current();
+                },
+                events: NO_EVENTS
+            };
+
+            matches.view = async () => current();
+            useBoard().open(current().id);
+            await settle();
+
+            const container = renderTest(() => MatchBoard(props) as Rendered).container;
+
+            await drawn(container);
+            sounds.heard.length = 0;
+            setCurrent(end);
+            await settle();
+
+            const endings = sounds.heard.filter((cue) => ENDINGS.includes(cue));
+
+            cleanup();
+            useBoard().close();
+
+            return endings;
+        };
+        const { mine: _mine, ...watched } = ended(['lost', 'won', 'lost', 'won']);
+
+        expect(await heard(ended(['won', 'lost', 'won', 'lost']))).toEqual(['win']);
+        expect(await heard(ended(['lost', 'won', 'lost', 'won']))).toEqual(['lose']);
+        expect(await heard(watched)).toEqual(['draw']);
     });
 });
 

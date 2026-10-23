@@ -48,7 +48,7 @@ const SHELL_BUDGET = 12 * KB;
 const ROUTE_BUDGET = 15 * KB;
 
 /** Each sound pack's ceiling: the shared one is fetched by every table and every toast, so it is kept smallest. */
-const PACK_BUDGETS = { common: 48 * KB, cards: 64 * KB };
+const PACK_BUDGETS = { common: 64 * KB, cards: 64 * KB };
 
 const PACK_BUDGET = 96 * KB;
 

@@ -9,6 +9,7 @@ import { useLocale } from '../src/stores/locale.store.ts';
 import { useBoard } from '../src/stores/match.store.ts';
 import { useSettings } from '../src/stores/settings.store.ts';
 import { POT_FLY, POT_GAP, POT_SPAN } from '../src/game/poker-beats.ts';
+import type { MatchView } from '../src/api.ts';
 import { BLINDS, EVERYBODY, elapse, heard, match, places, pot, rows, seated, stack, told } from './poker-mounted.ts';
 
 const sounds = vi.hoisted(() => ({ heard: [] as string[], felt: [] as string[], games: [] as string[] }));
@@ -270,6 +271,45 @@ describe('what a poker table sounds like', () =>
         expect(sounds.heard.slice(0, 2)).toEqual(['card-gather', 'chips-stack']);
         expect(sounds.heard).not.toContain('hand-won');
         expect(sounds.felt).toEqual([]);
+    });
+
+    it('ends the game as it went for whoever reads it, from its result or, before that is in hand, from the seat that won, and buzzes the winner alone', async () =>
+    {
+        const gone = { 2: { stack: 0, out: true }, 3: { stack: 0, out: true }, 4: { stack: 0, out: true }, 5: { stack: 0, out: true } };
+        const ended = async (mine: number | undefined, results: boolean) =>
+        {
+            const before = match({ button: 0, turn: 1, pots: [{ amount: 30, eligible: [0, 1] }], seats: rows({ ...gone, 0: { stack: 4490, bet: 10 }, 1: { stack: 4480, bet: 20 } }) }, { mine });
+            const after = match(
+                { button: 0, turn: undefined, pot: 0, pots: [], winner: 0, seats: rows({ ...gone, 0: { stack: 4520 }, 1: { stack: 0, out: true } }), last: { board: [], shown: [], pots: [{ amount: 30, winners: [0] }] } },
+                {
+                    rev: 8,
+                    turn: undefined,
+                    mine,
+                    finishedAt: new Date(401_000).toISOString(),
+                    ...(results ? { players: before.players.map((one) => ({ ...one, result: one.seat === 0 ? 'won' : one.seat === 1 ? 'abandoned' : 'lost' })) as MatchView['players'] } : {})
+                }
+            );
+
+            sounds.heard.length = 0;
+            sounds.felt.length = 0;
+
+            const { read } = await seated(before);
+
+            await read(after, heard(1, told(8, 1, { e: 'forfeit', seat: 1, reason: 'left', place: 2 }, { e: 'pot', amount: 30, winners: [0] }, { e: 'end', hand: 1, dealt: [0, 1] }, { e: 'finish', seat: 0 })));
+            await elapse(LONG);
+
+            const said = { heard: sounds.heard.filter((cue) => cue === 'win' || cue === 'lose' || cue === 'draw'), buzzed: sounds.felt.includes('win') };
+
+            cleanup();
+
+            return said;
+        };
+
+        expect(await ended(0, true)).toEqual({ heard: ['win'], buzzed: true });
+        expect(await ended(1, true)).toEqual({ heard: ['lose'], buzzed: false });
+        expect(await ended(undefined, true)).toEqual({ heard: ['draw'], buzzed: false });
+        expect(await ended(0, false), 'the winner, before the result is in hand').toEqual({ heard: ['win'], buzzed: true });
+        expect(await ended(1, false), 'the loser, before the result is in hand').toEqual({ heard: ['lose'], buzzed: false });
     });
 
     it('knocks for a check, lays a chip for a call and stacks them for an all-in, each when it is seen', async () =>

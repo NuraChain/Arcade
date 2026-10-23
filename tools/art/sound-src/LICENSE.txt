@@ -7,6 +7,7 @@ From Kenney (kenney.nl):
 
 - Casino Audio 1.1: https://kenney.nl/assets/casino-audio
 - Impact Sounds 1.0: https://kenney.nl/assets/impact-sounds
+- Interface Sounds: https://kenney.nl/assets/interface-sounds
 - Music Jingles 1.0: https://kenney.nl/assets/music-jingles
 
 From BigSoundBank (bigsoundbank.com), sounds by Joseph SARDIN:
@@ -15,6 +16,9 @@ From BigSoundBank (bigsoundbank.com), sounds by Joseph SARDIN:
   https://bigsoundbank.com/horse-trotting-s0610.html
 - bigsoundbank-1541-horse-neighing-4.ogg, "Horse neighing #4":
   https://bigsoundbank.com/horse-neighing-4-s1541.html
+- bigsoundbank-1372-tic-tac-mechanical-alarm-clock-1.ogg, "Tic Tac mechanical alarm clock #1",
+  the stretch from 2.5 to 7 seconds of it:
+  https://bigsoundbank.com/tic-tac-mechanical-alarm-clock-s1372.html
 
 From Wikimedia Commons, recorded by தகவலுழவன் (own work, 2011):
 

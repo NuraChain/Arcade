@@ -383,6 +383,26 @@ describe('a chess move, played', () =>
         expect(facts.at(-1)?.check).toBe(sq('e8'));
     });
 
+    it('sounds the end as it went for whoever reads it: a win, a loss, a draw, a watcher\'s close, and nothing for a game called off', async () =>
+    {
+        const START_LAY = lay('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1');
+        const ended = async (finish: Told, seat: number | null) =>
+        {
+            cues = [];
+            table.reset(sight(START_LAY, 5, seat));
+            play([act(6, 1, [finish])], sight(START_LAY, 6, seat));
+            await elapse(100);
+
+            return cues;
+        };
+
+        expect(await ended({ e: 'finish', reason: 'resign', winner: 0 }, 0)).toEqual(['win']);
+        expect(await ended({ e: 'finish', reason: 'flag', winner: 1 }, 0)).toEqual(['lose']);
+        expect(await ended({ e: 'finish', reason: 'stalemate' }, 1)).toEqual(['draw']);
+        expect(await ended({ e: 'finish', reason: 'resign', winner: 0 }, null)).toEqual(['draw']);
+        expect(await ended({ e: 'finish', reason: 'abort' }, 0)).toEqual([]);
+    });
+
     it('lays the mated king over once the mating move has landed', async () =>
     {
         table.reset(sight(lay('rnbqkbnr/pppp1ppp/8/4p3/6P1/5P2/PPPPP2P/RNBQKBNR b KQkq - 0 2')));
@@ -398,7 +418,7 @@ describe('a chess move, played', () =>
 
         expect(king.hasAttribute('data-tipped')).toBe(true);
         expect(of(king).at(-1)?.frames.at(-1)?.rotate).toBe('-76deg');
-        expect(cues.at(-1), 'the king is heard falling, from chess\'s own pack').toBe('king-fall');
+        expect(cues.slice(-2), 'the king is heard falling, from chess\'s own pack, and then the loss').toEqual(['king-fall', 'lose']);
         expect(table.same(sight(lay('rnb1kbnr/pppp1ppp/8/4p3/6Pq/5P2/PPPPP2P/RNBQKBNR w KQkq - 1 3', { mated: 'w', last: { from: sq('d8'), to: sq('h4') } })))).toBe(true);
     });
 
@@ -633,5 +653,121 @@ describe('a chess piece in the reader\'s hand', () =>
         table.reset(sight(lay(START)));
 
         expect(await table.advance(move('e3', 'e4', 'P'))).toBe(false);
+    });
+});
+
+describe('a chess landing, with timers that fire one at a time as a browser\'s do', () =>
+{
+    const tasks = (start: number) =>
+    {
+        let now = start;
+        let made = 0;
+        let waiting: { at: number; order: number; run: () => void }[] = [];
+
+        return {
+            now: () => now,
+
+            after(ms: number, run: () => void)
+            {
+                made += 1;
+
+                const due = { at: now + Math.max(0, ms), order: made, run };
+
+                waiting.push(due);
+
+                return () =>
+                {
+                    waiting = waiting.filter((one) => one !== due);
+                };
+            },
+
+            async elapse(ms: number)
+            {
+                const until = now + ms;
+
+                for (;;)
+                {
+                    const next = waiting.filter((one) => one.at <= until).sort((one, other) => one.at - other.at || one.order - other.order)[0];
+
+                    if (next === undefined)
+                    {
+                        break;
+                    }
+
+                    waiting = waiting.filter((one) => one !== next);
+                    now = Math.max(now, next.at);
+                    next.run();
+                    await flush();
+                }
+
+                now = until;
+                await flush();
+            }
+        };
+    };
+
+    it('sounds each piece set down before whatever follows it: the next move, the castled rook, the end, and a piece dropped from the hand', async () =>
+    {
+        const timers = tasks(1000);
+        const heard: string[] = [];
+        const own = document.createElement('div');
+        const sound: SoundHandle = {
+            play: (cue) =>
+            {
+                heard.push(cue);
+            },
+            setEnabled: () => undefined,
+            dispose: () => undefined
+        };
+        const ownStage = createStage({ clock: timers, quiet: () => false, report: (error) => broke.push(error) });
+        const ownDirector = createDirector(ownStage, timers, (error) => broke.push(error));
+        const board = createChessTable({ host: own, stage: ownStage, sound: () => sound, animals: () => false, feel: () => undefined });
+        const shown = async (acts: Act<Told>[], seen: Sight<Lay>) =>
+        {
+            heard.length = 0;
+            void ownDirector.enqueue((ctx) => board.play(acts, seen, ctx), { estimate: board.estimate(acts) });
+            await timers.elapse(4000);
+
+            return [...heard];
+        };
+
+        own.className = 'chess-layer';
+        document.body.append(own);
+
+        board.reset(sight(lay(START), 4, null));
+
+        expect(await shown([
+            act(5, 0, [move('e2', 'e4', 'P')]),
+            act(6, 1, [move('e7', 'e5', 'p', { seat: 1 })]),
+            act(7, 1, [{ e: 'finish', reason: 'resign', winner: 0 }])
+        ], sight(lay('rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2'), 7, null))).toEqual(['piece-move', 'piece-move', 'draw']);
+
+        board.reset(sight(lay(START), 4, null));
+
+        expect(await shown([
+            act(5, 0, [move('e2', 'e4', 'P')]),
+            act(6, 1, [move('g8', 'f6', 'n', { seat: 1 })]),
+            act(7, 1, [{ e: 'finish', reason: 'resign', winner: 0 }])
+        ], sight(lay('rnbqkb1r/pppppppp/5n2/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 1 2'), 7, null)), 'a knight\'s arc').toEqual(['piece-move', 'piece-move', 'draw']);
+
+        board.reset(sight(lay('r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1'), 5, 0));
+
+        expect(await shown([
+            act(6, 0, [move('e1', 'g1', 'K', { castle: 'k' })]),
+            act(7, 0, [{ e: 'finish', reason: 'resign', winner: 0 }])
+        ], sight(lay('r3k2r/8/8/8/8/8/8/R4RK1 b kq - 1 1'), 7, 0))).toEqual(['piece-move', 'piece-move', 'win']);
+
+        board.reset(sight(lay(START), 4, 0));
+        board.grab(sq('e2'));
+        board.drag(450, 560);
+        heard.length = 0;
+        void board.advance(move('e2', 'e4', 'P')).then(() => heard.push('after'));
+        await timers.elapse(2000);
+
+        expect(heard, 'a piece dropped from the hand').toEqual(['piece-move', 'after']);
+
+        ownDirector.cancel();
+        board.dispose();
+        own.remove();
     });
 });

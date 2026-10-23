@@ -2,7 +2,7 @@ import type { GameId } from '../data/games.ts';
 
 /** A pack of recordings, and the cues each one holds: every cue is in exactly one. */
 export const CUES = {
-    common: ['hand-won', 'win'],
+    common: ['turn', 'tick', 'tick-hi', 'deny', 'pass', 'chime', 'win', 'lose', 'draw', 'hand-won'],
     cards: ['card-slide', 'card-place', 'card-gather', 'card-shuffle', 'card-fan'],
     ludo: ['die-shake', 'die-land', 'pawn-step', 'pawn-hit', 'pawn-yard'],
     backgammon: ['cup-shake', 'dice-wood', 'checker', 'checker-hit', 'checker-bar', 'checker-off'],

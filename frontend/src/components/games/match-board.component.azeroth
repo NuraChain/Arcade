@@ -20,7 +20,7 @@ import { turnChime } from './table-cues.ts';
 import { FINISHED, YARD } from '../../game/board/path.ts';
 import { CELL, FRAME_ROUND, MARGIN } from '../../game/layout.ts';
 import { HISTORY, feltOf, keyOf, type Felt, type Told } from '../../game/ludo-felt.ts';
-import { createSound, type SoundHandle } from '../../game/sound.ts';
+import { createSound, endCue, type SoundHandle } from '../../game/sound.ts';
 import { createPresenter, type Sight, type Table } from '../../game/stage/presenter.ts';
 import { createStage } from '../../game/stage/stage.ts';
 import { coachOf, goalsOf, movedTo, pieceFor } from '../../game/helpers/ludo.ts';
@@ -487,6 +487,7 @@ export default component MatchBoard(props: { match: MatchView; events: EventBatc
     const gear: Omit<BoardOptions, 'host' | 'plate'> = {
         stage,
         sound: () => sound,
+        ending: () => untrack(() => endCue(mine === undefined ? undefined : game.players.find((player) => player.seat === mine)?.result)),
         feel: (kind) =>
         {
             if (untrack(() => mine) !== undefined)

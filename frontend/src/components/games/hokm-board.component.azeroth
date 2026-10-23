@@ -15,7 +15,7 @@ import { coachOf, outcomeOf } from '../../game/helpers/hokm.ts';
 import { BANNER_IN, BANNER_OUT, CARRY, COLLECT_GAP, DRAW_GAP, LIFT, NAMING, PLUS, SHUFFLE, TURN, TURN_GAP, dealGap, dealtIn, gatherOrder, holdBefore, openingPackets, restPackets, spanOf, type Packet } from '../../game/hokm-beats.ts';
 import { EMPTY, HISTORY, before, feltOf, sameAs, step, unplay, type Felt, type Laid, type Told } from '../../game/hokm-felt.ts';
 import { EASE, TIMING, centreOf, flightFrames, outside, rectIn, type Rect } from '../../game/motion.ts';
-import { createSound, type SoundHandle } from '../../game/sound.ts';
+import { createSound, endCue, type SoundHandle } from '../../game/sound.ts';
 import { anchor, cardAt, cardNode, drawn, stackNode, turnNode } from '../../game/stage/cards.ts';
 import { hashOf } from '../../game/stage/curves.ts';
 import type { Ctx } from '../../game/stage/director.ts';
@@ -924,6 +924,9 @@ export default component HokmBoard(props: { match: MatchView; events: EventBatch
 
     const withMe = (side: number | undefined) => mine !== undefined && side !== undefined && sideAt(mine) === side;
 
+    /** The reader's own result in the match on the page, else what the end said it was, or nothing for somebody watching. */
+    const ownResult = (won: boolean) => untrack(() => mine === undefined ? undefined : game.players.find((player) => player.seat === mine)?.result ?? (won ? 'won' : 'lost'));
+
     const unhome = () =>
     {
         homing = null;
@@ -1192,13 +1195,9 @@ export default component HokmBoard(props: { match: MatchView; events: EventBatch
         shown = held;
         banner = { points: move.points ?? 0, kot, ours };
 
-        if (kot)
+        if (ours)
         {
-            sound?.play('win');
-        }
-        else if (ours)
-        {
-            sound?.play('hand-won');
+            sound?.play(kot ? 'win' : 'hand-won');
         }
 
         if (ours)
@@ -1853,9 +1852,15 @@ export default component HokmBoard(props: { match: MatchView; events: EventBatch
 
             if (move.e === 'finish')
             {
+                const sting = endCue(ownResult(withMe(move.side)));
+
+                if (sting !== null)
+                {
+                    sound?.play(sting);
+                }
+
                 if (withMe(move.side))
                 {
-                    sound?.play('win');
                     haptic('win');
                 }
 

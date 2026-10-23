@@ -25,6 +25,30 @@ import { PEOPLE_FIXTURES } from './fixtures.ts';
 import { socket } from './fake-realtime.ts';
 import '../src/locales/app-catalogue.ts';
 
+const chimed = vi.hoisted(() => ({ heard: [] as string[], games: [] as string[] }));
+
+vi.mock('../src/game/sound.ts', async (original) =>
+{
+    const real = await original<typeof import('../src/game/sound.ts')>();
+
+    return {
+        ...real,
+        createSound: (_on: boolean, game?: string) =>
+        {
+            chimed.games.push(game ?? 'none');
+
+            return {
+                play: (cue: string) =>
+                {
+                    chimed.heard.push(cue);
+                },
+                setEnabled: () => undefined,
+                dispose: () => undefined
+            };
+        }
+    };
+});
+
 let clock: ManualClock;
 
 const settle = async () =>
@@ -131,6 +155,59 @@ describe('the cues store', () =>
         const shown = useToasts().items().filter((toast) => toast.dedupe === 'cue.request');
         expect(shown).toHaveLength(1);
         expect(shown[0].text).toContain('Maya Chen');
+    });
+
+    it('rings the app’s own chime from the shared sounds as a toast speaks, and nothing while sound is off', async () =>
+    {
+        useSettings().update({ sound: true });
+        await import('../src/game/sound.ts');
+        useCues().start();
+        await useSocial().refresh();
+        await settle();
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        chimed.heard.length = 0;
+        chimed.games.length = 0;
+
+        knock('maya.c');
+        await useSocial().refresh();
+        await settle();
+        await vi.waitFor(() => expect(chimed.heard).toEqual(['chime']));
+
+        expect(chimed.games, 'the chime fetched a table’s sounds').toEqual(['none']);
+
+        useSettings().update({ sound: false });
+        knock('peyman');
+        await useSocial().refresh();
+        await settle();
+
+        expect(useToasts().items().filter((toast) => toast.dedupe === 'cue.request').map((toast) => toast.text)).toContain('Peyman Salehi wants to be your friend');
+
+        await new Promise((resolve) => setTimeout(resolve, 50));
+
+        expect(chimed.heard, 'a toast rang with sound turned off').toEqual(['chime']);
+
+        useSettings().update({ sound: true });
+    });
+
+    it('plays no chime the store asked for once it has stopped, and makes no sound for it', async () =>
+    {
+        useSettings().update({ sound: true });
+        await import('../src/game/sound.ts');
+        useCues().start();
+        await useSocial().refresh();
+        await settle();
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        chimed.heard.length = 0;
+        chimed.games.length = 0;
+
+        knock('maya.c');
+        await useSocial().refresh();
+        await settle();
+        useCues().reset();
+        await new Promise((resolve) => setTimeout(resolve, 50));
+
+        expect(useToasts().items().some((toast) => toast.dedupe === 'cue.request'), 'no toast asked for the chime').toBe(true);
+        expect([chimed.heard, chimed.games], 'a store that had stopped rang, or made a sound nothing would let go of').toEqual([[], []]);
     });
 
     it('takes whoever presses the request’s button to where a request is answered', async () =>

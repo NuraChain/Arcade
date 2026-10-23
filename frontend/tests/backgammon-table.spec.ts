@@ -11,7 +11,7 @@ import type { Act } from '../src/game/stage/feed.ts';
 import { LAYER } from '../src/game/stage/layers.ts';
 import type { Sight } from '../src/game/stage/presenter.ts';
 import { createStage, type Stage } from '../src/game/stage/stage.ts';
-import type { Cue, SoundHandle } from '../src/game/sound.ts';
+import type { Cue, SoundHandle, endCue } from '../src/game/sound.ts';
 import { START } from '../../backend/src/domains/match/backgammon/board.ts';
 
 interface Drawn
@@ -73,6 +73,7 @@ let unplayed: string;
 let flagged: string[];
 let games: string[];
 let facts: Facts[];
+let owned: Parameters<typeof endCue>[0];
 
 const elapse = async (ms: number) =>
 {
@@ -126,6 +127,7 @@ beforeEach(() =>
     flagged = [];
     games = [];
     facts = [];
+    owned = undefined;
     host = document.createElement('div');
     host.className = 'bg-layer';
     document.body.append(host);
@@ -156,7 +158,8 @@ beforeEach(() =>
         onPass: (side, faces) => passes.push(`${ side } ${ faces.join() }`),
         banner: () => flagged,
         onGame: (side, how, points) => games.push(`${ side } ${ how } ${ points }`),
-        onFacts: (now) => facts.push(now)
+        onFacts: (now) => facts.push(now),
+        result: () => owned
     });
 });
 
@@ -724,6 +727,42 @@ describe('what happened, played on the table', () =>
             expect(cues).toContain('win');
             expect(table.same(after)).toBe(true);
             expect(director.busy()).toBe(false);
+        });
+
+        it('ends the match as it went for whoever reads it, and buzzes the winner\'s phone alone', async () =>
+        {
+            const ended = async (seat: number | null, winner: 0 | 1) =>
+            {
+                const theirs = winner === 1 && seat !== null;
+                const home = row({ 1: 1, 0: 14 });
+                const behind = row({ 20: 15 });
+                const before = felt({ near: theirs ? behind : home, far: theirs ? home : behind, cube: { on: true, value: 2, owner: theirs ? 'far' : 'near' } });
+                const after = sight(felt({ near: theirs ? behind : row({ 0: 15 }), far: theirs ? row({ 0: 15 }) : behind, cube: before.cube, score: theirs ? { near: 0, far: 4 } : { near: 4, far: 0 } }), 6, seat);
+
+                cues = [];
+                felt_ = [];
+                table.reset(sight(before, 5, seat));
+                play([act(6, winner, [
+                    { e: 'move', seat: winner, from: 1, to: 0, die: 1, hit: false },
+                    { e: 'game', seat: winner, how: 'gammon', points: 4, cube: 2 },
+                    { e: 'finish', seat: winner }
+                ])], after);
+                await elapse(400 + PICK_MS + 60 + LAST_MS + FLAG_MS + 400);
+
+                return { heard: cues.filter((cue) => cue === 'win' || cue === 'lose' || cue === 'draw'), buzzed: felt_.includes('win') };
+            };
+
+            expect(await ended(0, 0)).toEqual({ heard: ['win'], buzzed: true });
+            expect(await ended(0, 1)).toEqual({ heard: ['lose'], buzzed: false });
+            expect(await ended(null, 0)).toEqual({ heard: ['draw'], buzzed: false });
+
+            owned = 'void';
+
+            expect(await ended(0, 0), 'a match that did not count for its reader was heard as their win').toEqual({ heard: [], buzzed: false });
+
+            owned = 'lost';
+
+            expect(await ended(0, 0), 'the reader\'s own result was passed over for the side that won').toEqual({ heard: ['lose'], buzzed: false });
         });
 
         it('comes down with everything else when the table is drawn again under it', async () =>

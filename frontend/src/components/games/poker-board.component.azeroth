@@ -16,7 +16,7 @@ import { coachOf, handOf, pressed, priceOf, type PokerVerb } from '../../game/he
 import { EASE, centreOf, rectIn, type Rect } from '../../game/motion.ts';
 import { BETWEEN_CAP, BOARD_GAP, BOARD_OUT, CARD_FLY, CARD_GAP, CARD_RISE, CHIP_FLY, COLLECT, DEAL_LEAD, DISC_GAP, GATHER, GATHER_GAP, KNOCK, MUCK, MUCK_GAP, POT_FLY, POT_GAP, POT_SPAN, PUCK, RACK, TURN, WIN_AFTER, collectGap, dealGap, heldBefore, slides, spanOf, tabling } from '../../game/poker-beats.ts';
 import { EMPTY, HISTORY, STILL, before, dealOrder, dealing, drawnOf, feltOf, flying, inHand, landed, latest, sameAs, sharesOf, staged, step, swept, through, turned, turning, unturned, winnersOf, type Air, type Felt, type Paid, type Tabled, type Told } from '../../game/poker-felt.ts';
-import { createSound, type SoundHandle } from '../../game/sound.ts';
+import { createSound, endCue, type SoundHandle } from '../../game/sound.ts';
 import { cardAt, cardNode, stackNode, turnNode } from '../../game/stage/cards.ts';
 import { discsFor, pour } from '../../game/stage/chips.ts';
 import { launch, turn, type Launch } from '../../game/stage/flight.ts';
@@ -901,6 +901,9 @@ export default component PokerBoard(props: { match: MatchView; events: EventBatc
         await pour(ctx.stage, over, plate, discAt(rail, like), { discs: discsFor(chips, held.blinds.big), duration: RACK, gap: DISC_GAP, easing: EASE.fly, gone: true }).done;
     };
 
+/** The reader's own result in the match on the page, or nothing for somebody watching. */
+    const ownResult = (won: boolean) => untrack(() => mine === undefined ? undefined : game.players.find((player) => player.seat === mine)?.result ?? (won ? 'won' : 'lost'));
+
     const scene = async (move: Told, next: Felt, ctx: Ctx, trail?: Promise<void>[]) =>
     {
         const seat = move.seat ?? -1;
@@ -1003,12 +1006,21 @@ export default component PokerBoard(props: { match: MatchView; events: EventBatc
             sound?.play('pass');
             haptic('hit');
         }
-        else if (move.e === 'finish' && mineToo)
+        else if (move.e === 'finish')
         {
             if (await pause(WIN_AFTER, ctx))
             {
-                sound?.play('win');
-                haptic('win');
+                const sting = endCue(ownResult(mineToo));
+
+                if (sting !== null)
+                {
+                    sound?.play(sting);
+                }
+
+                if (mineToo)
+                {
+                    haptic('win');
+                }
             }
         }
     };

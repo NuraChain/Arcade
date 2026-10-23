@@ -102,6 +102,7 @@ let picked: string[];
 let byKey: boolean[];
 let facts: Facts[];
 let passes: [number, number, string][];
+let sting: 'win' | 'lose' | 'draw' | null;
 
 const elapse = async (ms: number) =>
 {
@@ -154,6 +155,7 @@ beforeEach(async () =>
 
     clock = manualClock(1000);
     cues = [];
+    sting = 'win';
     felt = [];
     drawn = [];
     broke = [];
@@ -183,6 +185,7 @@ beforeEach(async () =>
         plate: '',
         stage,
         sound: () => sound,
+        ending: () => sting,
         feel: (kind) => felt.push(kind),
         onPick: (key, keyed) =>
         {
@@ -530,6 +533,7 @@ describe('a ludo move, played', () =>
         const two = standing([[10, 20, YARD, YARD], [5, YARD, YARD, YARD]], null);
         const ended = stepped(two, { kind: 'forfeit', seat: 0, reason: 'left' });
 
+        sting = null;
         table.reset(sight(two));
         drawn.length = 0;
         play([ended.act], sight(ended.state, 1, 'm', []));
@@ -539,7 +543,26 @@ describe('a ludo move, played', () =>
         expect(pawn('0-0').style.translate).toBe(onSquare('red', 10));
         expect(lastFacts().out).toEqual([0]);
         expect(flecks()).toHaveLength(0);
-        expect(cues).toEqual([]);
+        expect(cues, 'a game that did not count for the reader is not heard ending').toEqual([]);
+    });
+
+    it('sounds the end of a game nobody won for whoever it counted against, once, and throws no confetti', async () =>
+    {
+        const two = standing([[10, 20, YARD, YARD], [5, YARD, YARD, YARD]], null);
+        const ended = stepped(two, { kind: 'forfeit', seat: 0, reason: 'resign' });
+
+        sting = 'lose';
+        table.reset(sight(two));
+        play([ended.act], sight(ended.state, 0, 'm', []));
+        await elapse(600);
+
+        expect(cues, 'the reader who gave up heard nothing of the end').toEqual(['lose']);
+        expect(flecks()).toHaveLength(0);
+
+        director.enqueue((ctx) => table.settle(sight(ended.state, 0, 'm', []), ctx));
+        await elapse(300);
+
+        expect(cues, 'the end was heard again').toEqual(['lose']);
     });
 
     it('picks a roll up from the board and the plate at once when whoever rolled it leaves, before the seat is called gone', async () =>
@@ -683,7 +706,7 @@ describe('a ludo landing, with timers that fire one at a time as a browser\'s do
         };
         const ownStage = createStage({ clock: timers, quiet: () => false, report: (error) => broke.push(error) });
         const ownDirector = createDirector(ownStage, timers, (error) => broke.push(error));
-        const board = await createLudoBoard({ host: own, plate: '', stage: ownStage, sound: () => sound, feel: () => undefined });
+        const board = await createLudoBoard({ host: own, plate: '', stage: ownStage, sound: () => sound, ending: () => 'win', feel: () => undefined });
         const shown = async (acts: Act<Told>[], seen: Sight<Felt>) =>
         {
             heard.length = 0;
@@ -1507,6 +1530,27 @@ describe('the ludo board, drawn again', () =>
 
         expect(drawn.filter((one) => one.el.classList.contains('lp'))).toHaveLength(0);
         expect(pawn('2-3').style.translate).toBe(onSquare('yellow', 12));
+    });
+
+    it('sounds the end as it went for whoever reads it, and throws the winners\' confetti whatever it was', async () =>
+    {
+        const state = standing([HOME, EMPTY], null);
+
+        sting = 'lose';
+        table.reset(sight(state, 0, 'm', []));
+        director.enqueue((ctx) => table.settle(sight(state, 0, 'm', ['red']), ctx));
+        await flush();
+
+        expect(cues, 'a loss is heard as one').toEqual(['lose']);
+        expect(flecks().length).toBeGreaterThan(10);
+
+        sting = null;
+        table.reset(sight(state, 0, 'm', []));
+        cues = [];
+        director.enqueue((ctx) => table.settle(sight(state, 0, 'm', ['red']), ctx));
+        await flush();
+
+        expect(cues, 'a game that did not count for the reader is not heard ending').toEqual([]);
     });
 
     it('celebrates a result that arrived with nothing said, once', async () =>

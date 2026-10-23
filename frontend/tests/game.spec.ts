@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { BLOCK, CELL, GOAL_REACH, GRID, HOME_SCALE, HOME_SLOTS, MARGIN, NEST, NEST_RADIUS, RIM, STACKS, aimNear, centreOf, tokenRadius } from '../src/game/layout.ts';
 import { FINISHED, YARD, pathBetween } from '../src/game/board/path.ts';
-import { createSound, offsetOf, resetSound } from '../src/game/sound.ts';
+import { createSound, endCue, offsetOf, resetSound } from '../src/game/sound.ts';
 import { CUES, PACKS, SAMPLED, TABLE_PACKS, unpack, type Pack } from '../src/game/sound-files.ts';
 import { ENTRY, RING_CELLS, cellAt } from '../../backend/src/domains/match/ludo/board.ts';
 import { chairsOf, ludoOf, type LudoSeat } from '../src/data/match.ts';
@@ -163,6 +163,7 @@ describe('the sound layer', () =>
         made: () => number;
         oscillators: () => number;
         buffers: () => number;
+        levels: () => number[];
         last: () => FakeContext | null;
     }
 
@@ -182,21 +183,33 @@ describe('the sound layer', () =>
         let made = 0;
         let oscillators = 0;
         let buffers = 0;
+        const played: Record<string, unknown>[] = [];
         const contexts: FakeContext[] = [];
 
-        const node = (): Record<string, unknown> => ({
-            gain: param(),
-            pan: param(),
-            frequency: param(),
-            playbackRate: param(),
-            threshold: param(),
-            knee: param(),
-            ratio: param(),
-            attack: param(),
-            release: param(),
-            connect: () => undefined,
-            stop: () => undefined
-        });
+        const node = () =>
+        {
+            const one: Record<string, unknown> = {
+                gain: param(),
+                pan: param(),
+                frequency: param(),
+                playbackRate: param(),
+                threshold: param(),
+                knee: param(),
+                ratio: param(),
+                attack: param(),
+                release: param(),
+                connect: (to: unknown) =>
+                {
+                    one.to = to;
+                },
+                stop: () => undefined
+            };
+
+            return one;
+        };
+
+        /** The level of the bus a recording went into: its source feeds its own level, which feeds the bus. */
+        const busOf = (source: Record<string, unknown>) => ((source.to as Record<string, unknown>).to as { gain: { value: number } }).gain.value;
 
         vi.stubGlobal('AudioContext', class implements FakeContext
         {
@@ -269,9 +282,17 @@ describe('the sound layer', () =>
                 return { ...node(), start: () => oscillators += 1 };
             }
 
-            public createBufferSource(): Record<string, unknown>
+            public createBufferSource()
             {
-                return { ...node(), start: () => buffers += 1 };
+                const source = node();
+
+                source.start = () =>
+                {
+                    buffers += 1;
+                    played.push(source);
+                };
+
+                return source;
             }
 
             public decodeAudioData(): Promise<unknown>
@@ -280,7 +301,7 @@ describe('the sound layer', () =>
             }
         });
 
-        return { made: () => made, oscillators: () => oscillators, buffers: () => buffers, last: () => contexts.at(-1) ?? null };
+        return { made: () => made, oscillators: () => oscillators, buffers: () => buffers, levels: () => played.map(busOf), last: () => contexts.at(-1) ?? null };
     };
 
     const pack = (takes: Record<string, number[][]>) =>
@@ -437,6 +458,125 @@ describe('the sound layer', () =>
         used.dispose();
     });
 
+    describe('a cue asked for in the moment its handle is made, as the app\'s chime is', () =>
+    {
+        const used = (touched: boolean) =>
+        {
+            const idle: (() => void)[] = [];
+
+            vi.stubGlobal('navigator', { ...navigator, userActivation: { hasBeenActive: touched } });
+            vi.stubGlobal('requestIdleCallback', (callback: () => void) => idle.push(callback));
+
+            return () => idle.splice(0).forEach((run) => run());
+        };
+
+        const macrotask = (ms = 0) => new Promise((resolve) => setTimeout(resolve, ms));
+
+        it('is played once the context is made, from its recording when that arrives in time', async () =>
+        {
+            vi.stubGlobal('fetch', () => Promise.resolve({ ok: true, arrayBuffer: () => Promise.resolve(pack({ 'chime': [[1, 2]] })) }));
+            const fake = stub('running');
+            const quiet = used(true);
+            const sound = createSound(true);
+
+            sound.play('chime');
+            quiet();
+
+            expect(fake.made()).toBe(1);
+            expect([fake.buffers(), fake.oscillators()], 'the chime was played before its recording could arrive').toEqual([0, 0]);
+
+            await macrotask();
+
+            expect([fake.buffers(), fake.oscillators()], 'the chime was lost, or played as its tone with its recording in hand').toEqual([1, 0]);
+
+            sound.dispose();
+        });
+
+        it('is played as its tone when the recording is late, and holds back nothing asked for after the context is made', async () =>
+        {
+            vi.stubGlobal('fetch', () => new Promise(() => undefined));
+            const fake = stub('running');
+            const quiet = used(true);
+            const sound = createSound(true);
+
+            sound.play('chime');
+            quiet();
+            sound.play('turn');
+
+            expect(fake.oscillators(), 'a cue asked for once the context was made waited for the pack').toBeGreaterThan(0);
+
+            const before = fake.oscillators();
+
+            await macrotask(100);
+
+            expect(fake.oscillators(), 'the chime gave up on its recording at once').toBe(before);
+
+            await macrotask(400);
+
+            expect(fake.oscillators(), 'the chime was never played').toBeGreaterThan(before);
+
+            sound.dispose();
+        });
+
+        it('keeps four of them at most', async () =>
+        {
+            vi.stubGlobal('fetch', () => Promise.resolve({ ok: true, arrayBuffer: () => Promise.resolve(pack({ 'chime': [[1]], 'turn': [[2]], 'tick': [[3]], 'tick-hi': [[4]], 'pass': [[5]], 'deny': [[6]] })) }));
+            const fake = stub('running');
+            const quiet = used(true);
+            const sound = createSound(true);
+
+            for (const cue of ['chime', 'turn', 'tick', 'tick-hi', 'pass', 'deny'] as const)
+            {
+                sound.play(cue);
+            }
+
+            quiet();
+            await macrotask();
+
+            expect(fake.buffers()).toBe(4);
+
+            sound.dispose();
+        });
+
+        it('keeps nothing on a page nobody has touched, so a tap later does not play an old chime', async () =>
+        {
+            const fake = stub();
+            const quiet = used(false);
+            const sound = createSound(true);
+
+            sound.play('chime');
+            await tap();
+            await flush();
+            quiet();
+
+            expect(fake.made()).toBe(1);
+            expect(fake.oscillators(), 'a chime from before the tap was played at the tap').toBe(0);
+
+            sound.dispose();
+        });
+
+        it('plays a tap\'s own cue at the tap when the tap comes before the quiet moment', async () =>
+        {
+            const fake = stub();
+            const quiet = used(true);
+            const sound = createSound(true);
+            const handler = () => sound.play('turn');
+
+            window.addEventListener('keydown', handler);
+            await tap('keydown');
+            window.removeEventListener('keydown', handler);
+            await flush();
+
+            expect(fake.oscillators(), 'the tap\'s cue waited for a quiet moment').toBeGreaterThan(0);
+
+            quiet();
+
+            expect(fake.made(), 'the quiet moment made a second context').toBe(1);
+
+            sound.dispose();
+        });
+    });
+
     it('stays quiet while suspended with no resume pending, and asks for a tap again', async () =>
     {
         const fake = stub();
@@ -505,6 +645,28 @@ describe('the sound layer', () =>
         sound.dispose();
     });
 
+    it('has a voice of its own for every shared cue but a won hand while the shared pack is on its way, so a clock and an ending are never silent', async () =>
+    {
+        const fake = stub();
+        const sound = createSound(true);
+
+        await tap();
+        await flush();
+
+        const silent = CUES.common.filter((cue) =>
+        {
+            const before = fake.oscillators();
+
+            sound.play(cue);
+
+            return fake.oscillators() === before;
+        });
+
+        expect(silent).toEqual(['hand-won']);
+
+        sound.dispose();
+    });
+
     it('plays the recording once it has arrived', async () =>
     {
         vi.stubGlobal('fetch', () => Promise.resolve({ ok: true, arrayBuffer: () => Promise.resolve(pack({ 'card-slide': [[1, 2, 3]] })) }));
@@ -520,6 +682,36 @@ describe('the sound layer', () =>
         expect(fake.buffers()).toBe(1);
 
         sound.dispose();
+    });
+
+    it('plays a recording at the level of what it is: what the table says as quietly as its tones were, the end as a jingle, the pieces as foley', async () =>
+    {
+        vi.stubGlobal('fetch', () => Promise.resolve({ ok: true, arrayBuffer: () => Promise.resolve(pack({ 'turn': [[1]], 'chime': [[2]], 'win': [[3]], 'pawn-step': [[4]] })) }));
+        const fake = stub();
+        const sound = createSound(true, 'ludo');
+
+        await tap();
+        await flush();
+        await flush();
+
+        sound.play('turn');
+        sound.play('chime');
+        sound.play('win');
+        sound.play('pawn-step');
+
+        expect(fake.levels()).toEqual([0.45, 0.45, 0.6, 0.9]);
+
+        sound.dispose();
+    });
+
+    it('ends a game on the reader\'s own result: a win, a loss for a loser and a quitter, a close for a draw and a watcher, and nothing for no contest', () =>
+    {
+        expect(endCue('won')).toBe('win');
+        expect(endCue('lost')).toBe('lose');
+        expect(endCue('abandoned')).toBe('lose');
+        expect(endCue('drawn')).toBe('draw');
+        expect(endCue(undefined)).toBe('draw');
+        expect(endCue('void')).toBeNull();
     });
 
     /** Answers every pack asked for with an empty one (or refuses those `fail` names) and keeps the addresses asked. */

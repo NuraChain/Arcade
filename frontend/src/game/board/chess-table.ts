@@ -6,7 +6,7 @@ import { LAYER, layered } from '../stage/layers.ts';
 import type { Table } from '../stage/presenter.ts';
 import { arc, type Point } from '../stage/route.ts';
 import type { Run, Stage } from '../stage/stage.ts';
-import type { Cue, SoundHandle } from '../sound.ts';
+import { endCue, type Cue, type SoundHandle } from '../sound.ts';
 import type { Haptic } from '../../lib/haptics.ts';
 
 /** What the table is told to show: the felt, whose colour stands at the foot, and a king mated on it. */
@@ -333,7 +333,7 @@ export function createChessTable(options: ChessOptions): ChessTable
         tell();
     };
 
-    const glide = (el: HTMLElement, from: Point, to: Point, knight: boolean, delay = 0) =>
+    const glide = (el: HTMLElement, from: Point, to: Point, knight: boolean, delay = 0, landed?: () => void) =>
     {
         const span = Math.hypot(to.x - from.x, to.y - from.y);
 
@@ -345,7 +345,7 @@ export function createChessTable(options: ChessOptions): ChessTable
                 offset: one.at / KNIGHT_MS,
                 translate: at(one),
                 scale: (1 + one.lift * 0.6).toFixed(3)
-            })), { duration: KNIGHT_MS, delay });
+            })), { duration: KNIGHT_MS, delay, landed });
         }
 
         const duration = clamp(GLIDE_BASE + span * GLIDE_PACE, GLIDE_LEAST, GLIDE_MOST);
@@ -354,10 +354,10 @@ export function createChessTable(options: ChessOptions): ChessTable
             { offset: 0, translate: at(from), scale: '1' },
             { offset: 0.5, scale: '1.05' },
             { offset: 1, translate: at(to), scale: '1' }
-        ], { duration, delay, easing: GLIDE_EASE });
+        ], { duration, delay, easing: GLIDE_EASE, landed });
     };
 
-    const hop = (el: HTMLElement, from: Point, to: Point, delay: number) =>
+    const hop = (el: HTMLElement, from: Point, to: Point, delay: number, landed?: () => void) =>
     {
         el.style.zIndex = String(LAYER.airborne);
 
@@ -365,17 +365,17 @@ export function createChessTable(options: ChessOptions): ChessTable
             offset: one.at / ROOK_MS,
             translate: at(one),
             scale: (1 + one.lift * 0.5).toFixed(3)
-        })), { duration: ROOK_MS, delay });
+        })), { duration: ROOK_MS, delay, landed });
     };
 
-    const setDown = (el: HTMLElement, from: Point, to: Point, base: number, pace: number, most: number) =>
+    const setDown = (el: HTMLElement, from: Point, to: Point, base: number, pace: number, most: number, landed?: () => void) =>
     {
         el.style.zIndex = String(LAYER.moving);
 
         return stage.animate(el, [
             { offset: 0, translate: at(from), scale: '1.18' },
             { offset: 1, translate: at(to), scale: '1' }
-        ], { duration: clamp(base + Math.hypot(to.x - from.x, to.y - from.y) * pace, base, most), easing: SET_DOWN });
+        ], { duration: clamp(base + Math.hypot(to.x - from.x, to.y - from.y) * pace, base, most), easing: SET_DOWN, landed });
     };
 
     const take = (man: Man, delay: number) =>
@@ -467,13 +467,20 @@ export function createChessTable(options: ChessOptions): ChessTable
     };
 
     /** One logged move, played from where the table shows it: the piece travels, and whatever it takes goes as it arrives. */
-    const perform = async (move: Told) =>
+    const perform = async (move: Told, seat: number | null = null) =>
     {
         if (move.e === 'finish')
         {
             if (move.reason === 'checkmate')
             {
                 await tip(toMove);
+            }
+
+            const sting = endCue(move.reason === 'abort' ? 'void' : seat === null ? undefined : move.winner === undefined ? 'drawn' : move.winner === seat ? 'won' : 'lost');
+
+            if (sting !== null)
+            {
+                options.sound()?.play(sting);
             }
 
             return true;
@@ -509,9 +516,10 @@ export function createChessTable(options: ChessOptions): ChessTable
 
         const el = ensure(arrived, promoted ? mover.piece : arrived.piece);
         const from = letGo(mover.key);
+        const click = () => options.sound()?.play(animal?.step ?? 'piece-move', { pan: pan(landing), rate: victim === undefined || animal !== undefined ? 1 : 0.9 });
         const run = from === null
-            ? glide(el, spot(move.from), landing, kindOf(mover.piece) === 'n')
-            : setDown(el, from, landing, DROP_BASE, DROP_PACE, DROP_MOST);
+            ? glide(el, spot(move.from), landing, kindOf(mover.piece) === 'n', 0, click)
+            : setDown(el, from, landing, DROP_BASE, DROP_PACE, DROP_MOST, click);
 
         el.removeAttribute('data-held');
         el.style.translate = at(landing);
@@ -547,12 +555,9 @@ export function createChessTable(options: ChessOptions): ChessTable
             const rookEl = ensure(moved);
 
             flying.add(rookMan.key);
-            rookRun = hop(rookEl, spot(rook.from), spot(rook.to), run.length * ROOK_LAG);
+            rookRun = hop(rookEl, spot(rook.from), spot(rook.to), run.length * ROOK_LAG, () => options.sound()?.play('piece-move', { pan: pan(spot(rook.to)), rate: 0.92 }));
             rookEl.style.translate = at(spot(rook.to));
-            stage.after(rookRun.length, () => options.sound()?.play('piece-move', { pan: pan(spot(rook.to)), rate: 0.92 }));
         }
-
-        stage.after(run.length, () => options.sound()?.play(animal?.step ?? 'piece-move', { pan: pan(landing), rate: victim === undefined || animal !== undefined ? 1 : 0.9 }));
 
         await run.done;
         flying.delete(mover.key);
@@ -709,7 +714,7 @@ export function createChessTable(options: ChessOptions): ChessTable
                         return;
                     }
 
-                    if (!(await perform(move)))
+                    if (!(await perform(move, sight.seat)))
                     {
                         await mend(sight.view);
 

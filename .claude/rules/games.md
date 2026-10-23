@@ -5182,17 +5182,27 @@ switching tables never has to unlock audio again. The spec is
   are kept, four at most, and played as soon as it is made; `resume()` is asynchronous, so a
   `resuming` flag lets cues be scheduled while it is on its way. Outside those windows nothing is
   scheduled on a context that is not running.
+- **So does a cue asked for in the moment its handle is made.** The cues store makes its handle at
+  the first toast and plays the chime at once, and on a page already used the context waits for a
+  quiet moment: the first chime of every visit was dropped. While that context is on its way
+  (`warming`, only where the page has been used) cues are kept, four at most, and they wait for
+  their recordings up to `EARLY_WAIT_MS` (400 ms) before they are played as their tones; whatever
+  is asked once the context is made plays at once, so a board's sounds never wait on a pack. A tap
+  in between ends the wait. On a page nobody has touched nothing is kept, so a later tap never
+  plays an old chime.
 - **An interruption re-arms it.** A call, Siri or a screen lock puts WebKit into `interrupted`; the
   `statechange` listener puts the tap listeners back, and a context still not running 300ms after a tap
   is rebuilt, because WebKit's can get stuck there.
-- **Recorded foley, synthesised interface.** Cards, dice, wood and the two jingles are CC0 recordings
-  from Kenney, and chess's horse and elephant CC0 recordings from BigSoundBank and Wikimedia Commons
+- **Recordings, with a tone behind the ones that must never be silent.** Cards, dice, wood, the
+  shared cues and the end of a game are CC0 recordings from Kenney, the clock's tic and tac and
+  chess's horse CC0 recordings from BigSoundBank, and the elephant one from Wikimedia Commons
   (`tools/art/sound-src/`, every source credited in its `LICENSE.txt`), trimmed, or cut and mixed
   (a take with a `shape` in `tools/art/sound.mjs`), and encoded to mono MP3 (96 kbps, a long voice
   56) by `npm run sound` into packs - each an `NCUE` header, a JSON index and the takes back to back -
   imported through `new URL(..., import.meta.url)` so each lands hashed in `/assets/` and is cached as
-  immutable. **A pack belongs to the tables that play it**: `common` (the jingles every table ends
-  with), `cards` (Hokm and poker), `ludo`, `backgammon`, `poker` and `chess`, each cue in exactly one
+  immutable. **A pack belongs to the tables that play it**: `common` (what every table and the
+  toasts share: the turn, the clock's tic and tac, a refusal, nothing to move, the app's chime and
+  the end of a game), `cards` (Hokm and poker), `ludo`, `backgammon`, `poker` and `chess`, each cue in exactly one
   (`CUES` in `game/sound-files.ts`). A board's handle names its game (`createSound(on, game)`) and
   fetches `common` and that game's packs (`TABLE_PACKS`), each once whatever else is open, and only
   while some handle that wants it has its sound on; a clock, a chess clock and the cues store fetch
@@ -5204,11 +5214,13 @@ switching tables never has to unlock audio again. The spec is
   `king-fall`. The neutral extension is load-bearing: a download manager (IDM and its kind, common
   among Persian users) intercepts any `.mp3` a page fetches and hands the page an empty 204, which
   is how the first build of this was silent on the owner's own machine while curl got a perfect 200.
-  The turn, the ticks, trump, trick, bonus, pass and deny are synthesised. A recording that failed to
+  Trump, trick, bonus, home, check and promote are still synthesised. A recording that failed to
   load falls back to its synthesised voice or to silence and never throws, which keeps "nothing can
-  404 halfway through a game" true in behaviour. `assetsInlineLimit` refuses to inline a pack, and
+  404 halfway through a game" true in behaviour; every shared cue but a won hand has a voice
+  (`TONES`), so a clock, a refusal and the end of a game are heard while `common` is on its way.
+  `assetsInlineLimit` refuses to inline a pack, and
   `tools/budgets.mjs` requires every pack in `frontend/src/game/sound` once in `.dist-frontend/assets`
-  and nothing else there, each under its ceiling (`common` 48 KB, `cards` 64, every other 96), and no
+  and nothing else there, each under its ceiling (`common` 64 KB, `cards` 64, every other 96), and no
   file there with a media extension at all. `tools/art/sound-levels.mjs` measures every take of every
   pack (its length, its peak, its loudness in the band a phone's speaker plays against the chess
   click, where its energy sits and how fast its onsets come), which is how a take is chosen and
@@ -5217,7 +5229,26 @@ switching tables never has to unlock audio again. The spec is
 - **Mixed like a game, not like a web page.** Three buses (foley 0.9, interface 0.45, jingles 0.6) into
   a 0.7 master and a limiter; each play varies its rate by up to 10% and its level by 1.5 dB, rotates
   through the takes, is panned by where it happens, and the same cue is not started more than three
-  times at once or twice within 35ms.
+  times at once or twice within 35ms. What the table SAYS (the turn, the clock, a refusal, nothing
+  to move, the chime) goes to the interface bus whether it is a recording or a tone (`INTERFACE`),
+  the end of a game to the jingles, and every other recording to the foley: recorded, the turn
+  would otherwise have come out twice as loud as the tone it replaced.
+- **The end is heard as it went for whoever reads it** (`endCue` in `game/sound.ts`). A seat that
+  won hears `win` (a pizzicato run that rises), one that lost or walked away `lose` (one that
+  falls), a draw and somebody watching `draw` (one that settles where it began), and a game called
+  off nothing. Every board asks it where it used to play `win`, which Ludo played to everybody once
+  anybody had won and the others to the winner alone: Ludo still throws its confetti for everybody
+  and sounds what the reader's own result says (`ending` in `BoardOptions`), at its finish whether
+  or not anybody won and once a game (`close`): the walk found a two-seat game given up too early
+  to count, the loser rated down and told nothing, because the sound lived inside the confetti.
+  Backgammon calls the match's last game, from the reader's own result where the board has it
+  (`result` in its table's options) and from the side that won only before that, so the survivor
+  of an early walkout, whose card says No contest, hears nothing; chess finishes after its
+  king has fallen, Hokm and poker at their finish (`ownResult`, which falls back to the side or the
+  seat the event names when the reader's result is not in hand yet). A hand of Hokm still ends on
+  `hand-won` for the side that took it, and a kot on `win` for that side alone, where both sides
+  heard it. The phone's buzz is still the winner's alone. `game.spec.ts` holds `endCue`, and each
+  board's spec what a winner, a loser and a watcher hear.
 - **A hidden tab hears only what is urgent** - the turn and the ticks - and the iOS audio session is
   `ambient`, so the silent switch mutes it and it mixes with the player's music.
 - **Sound is on by default**, because a native game starts with sound; nothing plays before the first
@@ -5235,8 +5266,11 @@ switching tables never has to unlock audio again. The spec is
   clicks about 60 ms long with their energy near 1.1 kHz, the knocks 100 ms near 270 Hz, the way a
   chess app's move and capture differ. The knight and the bishop have four more cues of their own
   (*The knight is a horse and the bishop an elephant*, under *Chess*), in chess's own pack.
-  `TurnClock` takes `yours` and ticks at five, four and three seconds and higher at two and one, for
-  every game, with one `warn` buzz at five.
+  `TurnClock` takes `yours` and ticks for every game with a mechanical clock's tic at five, four and
+  three seconds and its tac, a little higher, at two and one, with one `warn` buzz at five. The
+  toasts' chime is a soft glass bell from the shared pack (`chime`; it borrowed the six's `bonus`),
+  and one asked for as the cues store stops is not played: the handle it would make is one that
+  nothing lets go of, and the next spec heard it.
 
 **Hokm is played in motion, on the stage every table shares, and the table runs a little behind the
 server on purpose.** The spec is `docs/superpowers/specs/2026-09-23-table-motion-sound-design.md`
@@ -5478,6 +5512,14 @@ fall due before the run does. `stage-kit.spec.ts` holds the hook, and `ludo-boar
 ludo landing, with timers that fire one at a time as a browser's do*) plays a capture, a home and
 an entry onto a held square on a clock that runs the promises between its timers. With the old
 timing it hears the order the browser played.
+
+Chess had the same timers and the S2 walk heard them: a watcher was played the end of a game
+between the last move and that move's click (`piece-move, draw, piece-move`). A piece's click,
+a knight's included, a piece dropped from the hand and the castled rook's are told by their runs'
+`landed` now (`glide`, `setDown` and `hop` take it), and `chess-table.spec.ts` (*a chess landing,
+with timers that fire one at a time as a browser's do*) holds each path. Backgammon's checker
+sound is still a timer of its own beside its run, which only changes the order of two sounds
+that start in one instant.
 
 **Less motion is the stage's decision, so a renderer has one path.** With the reader's setting on,
 `animate` swaps a run's frames for a 140 ms fade where the thing ends up (`quiet: 'out'` fades out

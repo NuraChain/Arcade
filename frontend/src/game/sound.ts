@@ -1,8 +1,14 @@
+import type { MatchView } from '../api.ts';
 import type { GameId } from '../data/games.ts';
 import { CUES, PACKS, SAMPLED, TABLE_PACKS, unpack, type Pack, type Sampled } from './sound-files.ts';
 
+type Result = NonNullable<MatchView['players'][number]['result']>;
+
 export type Tone =
     | 'turn'
+    | 'chime'
+    | 'lose'
+    | 'draw'
     | 'tick'
     | 'tick-hi'
     | 'trump'
@@ -75,6 +81,7 @@ interface Engine
     parked: boolean;
     armed: boolean;
     waking: boolean;
+    warming: boolean;
     early: { cue: Cue; options: PlayOptions }[];
     turn: Map<Cue, number>;
     voices: Map<Cue, { active: number; last: number }>;
@@ -109,6 +116,16 @@ const TONES: Record<Tone, readonly Voice[]> = {
         { wave: 'triangle', from: 988, to: 988, hold: 0.14, gain: 0.12, delay: 0.07 }
     ],
     'bonus': [{ wave: 'triangle', from: 880, to: 1320, hold: 0.1, gain: 0.12, delay: 0 }],
+    'chime': [{ wave: 'triangle', from: 880, to: 1320, hold: 0.1, gain: 0.12, delay: 0 }],
+    'lose': [
+        { wave: 'triangle', from: 523, to: 523, hold: 0.16, gain: 0.22, delay: 0 },
+        { wave: 'triangle', from: 440, to: 440, hold: 0.16, gain: 0.22, delay: 0.14 },
+        { wave: 'triangle', from: 349, to: 349, hold: 0.32, gain: 0.22, delay: 0.28 }
+    ],
+    'draw': [
+        { wave: 'triangle', from: 440, to: 440, hold: 0.18, gain: 0.2, delay: 0 },
+        { wave: 'triangle', from: 440, to: 440, hold: 0.3, gain: 0.2, delay: 0.16 }
+    ],
     'pass': [{ wave: 'sine', from: 330, to: 220, hold: 0.16, gain: 0.1, delay: 0 }],
     'deny': [
         { wave: 'square', from: 180, to: 150, hold: 0.08, gain: 0.06, delay: 0 },
@@ -154,7 +171,10 @@ const TONES: Record<Tone, readonly Voice[]> = {
     ]
 };
 
-const JINGLES: ReadonlySet<Cue> = new Set<Cue>(['win', 'hand-won']);
+const JINGLES: ReadonlySet<Cue> = new Set<Cue>(['win', 'lose', 'draw', 'hand-won']);
+
+/** What the table says rather than what is on it: as quiet as these were while they were synthesised. */
+const INTERFACE: ReadonlySet<Cue> = new Set<Cue>(['turn', 'tick', 'tick-hi', 'deny', 'pass', 'chime']);
 
 const LEVELS: Record<Bus, number> = { foley: 0.9, ui: 0.45, jingle: 0.6 };
 
@@ -172,6 +192,9 @@ const WARM_MS = 1500;
 
 const EARLY_MOST = 4;
 
+/** How long a cue asked for before the context was made waits for its recording before it is played as its tone. */
+const EARLY_WAIT_MS = 400;
+
 const LOUD = 0.004;
 
 type ContextMaker = typeof AudioContext;
@@ -188,6 +211,7 @@ const fresh = (): Engine => ({
     parked: false,
     armed: false,
     waking: false,
+    warming: false,
     early: [],
     turn: new Map(),
     voices: new Map()
@@ -209,7 +233,23 @@ function busOf(cue: Cue): Bus
         return 'jingle';
     }
 
-    return (SAMPLED as readonly Cue[]).includes(cue) ? 'foley' : 'ui';
+    return INTERFACE.has(cue) || !(SAMPLED as readonly Cue[]).includes(cue) ? 'ui' : 'foley';
+}
+
+/** What the end of a game sounds like to its reader: their own result, a neutral close to somebody watching, and nothing for no contest. */
+export function endCue(result: Result | undefined): 'win' | 'lose' | 'draw' | null
+{
+    if (result === 'void')
+    {
+        return null;
+    }
+
+    if (result === 'won')
+    {
+        return 'win';
+    }
+
+    return result === 'lost' || result === 'abandoned' ? 'lose' : 'draw';
 }
 
 export function offsetOf(samples: Float32Array, rate: number)
@@ -358,8 +398,11 @@ function later(run: () => void, idle: boolean)
 
 function warm()
 {
+    engine.warming = false;
+
     if (engine.context !== null || engine.handles === 0 || engine.listening === 0 || !activated())
     {
+        replay();
         return;
     }
 
@@ -370,21 +413,39 @@ function warm()
         disarm();
     }
 
-    load();
+    const at = engine;
+    const early = engine.early;
+
+    engine.early = [];
+
+    void Promise.race([load(), new Promise((resolve) => setTimeout(resolve, EARLY_WAIT_MS))]).then(() =>
+    {
+        for (const one of engine === at ? early : [])
+        {
+            play(one.cue, one.options);
+        }
+    });
 }
 
-function woken()
+/** Plays, in order, what was asked for before there was a context to play it on. */
+function replay()
 {
     const early = engine.early;
 
-    engine.waking = false;
     engine.early = [];
-    unlock();
 
     for (const one of early)
     {
         play(one.cue, one.options);
     }
+}
+
+function woken()
+{
+    engine.waking = false;
+    engine.warming = false;
+    unlock();
+    replay();
 }
 
 function wake()
@@ -448,26 +509,30 @@ function unlock()
         }, STALL_MS);
     }
 
-    load();
+    void load();
 }
 
-/** Fetches every pack a table that is listening plays from and nobody has fetched yet. */
+/** Fetches every pack a table that is listening plays from and nobody has fetched yet, and says when they are in. */
 function load()
 {
     const context = engine.context;
 
     if (context === null || typeof fetch !== 'function')
     {
-        return;
+        return Promise.resolve();
     }
+
+    const fetching: Promise<void>[] = [];
 
     for (const [pack, wanting] of engine.wanted)
     {
         if (wanting > 0 && !engine.fetched.has(pack))
         {
-            fetchPack(context, pack);
+            fetching.push(fetchPack(context, pack));
         }
     }
+
+    return Promise.all(fetching);
 }
 
 function fetchPack(context: AudioContext, pack: Pack)
@@ -476,26 +541,18 @@ function fetchPack(context: AudioContext, pack: Pack)
 
     at.fetched.add(pack);
 
-    void fetch(PACKS[pack])
+    return fetch(PACKS[pack])
         .then((response) => response.ok ? response.arrayBuffer() : Promise.reject(new Error(String(response.status))))
-        .then((bytes) =>
-        {
-            for (const [cue, takes] of unpack(bytes, CUES[pack]))
-            {
-                for (const take of takes)
+        .then((bytes) => Promise.all([...unpack(bytes, CUES[pack])].flatMap(([cue, takes]) => takes.map((take) =>
+            context.decodeAudioData(take)
+                .then((buffer) =>
                 {
-                    void context.decodeAudioData(take)
-                        .then((buffer) =>
-                        {
-                            const held = at.takes.get(cue) ?? [];
-                            held.push({ buffer, offset: offsetOf(buffer.getChannelData(0), buffer.sampleRate) });
-                            at.takes.set(cue, held);
-                        })
-                        .catch(() => undefined);
-                }
-            }
-        })
-        .catch(() =>
+                    const held = at.takes.get(cue) ?? [];
+                    held.push({ buffer, offset: offsetOf(buffer.getChannelData(0), buffer.sampleRate) });
+                    at.takes.set(cue, held);
+                })
+                .catch(() => undefined)))))
+        .then(() => undefined, () =>
         {
             at.fetched.delete(pack);
         });
@@ -584,6 +641,16 @@ function play(cue: Cue, options: PlayOptions)
 {
     const context = engine.context;
     const buses = engine.buses;
+
+    if (engine.warming)
+    {
+        if (engine.early.length < EARLY_MOST)
+        {
+            engine.early.push({ cue, options });
+        }
+
+        return;
+    }
 
     if (context === null || buses === null)
     {
@@ -683,6 +750,7 @@ export function createSound(enabled: boolean, game?: GameId): SoundHandle
 
     if (context === null && on)
     {
+        engine.warming = activated();
         later(warm, true);
     }
 
@@ -694,7 +762,7 @@ export function createSound(enabled: boolean, game?: GameId): SoundHandle
 
     if (context !== null && on)
     {
-        load();
+        void load();
     }
 
     return {
@@ -719,7 +787,7 @@ export function createSound(enabled: boolean, game?: GameId): SoundHandle
 
             if (next)
             {
-                load();
+                void load();
             }
         },
 

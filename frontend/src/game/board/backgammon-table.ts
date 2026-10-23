@@ -57,7 +57,7 @@ import { LAYER, layered } from '../stage/layers.ts';
 import type { Table } from '../stage/presenter.ts';
 import { arc, walk, type Point } from '../stage/route.ts';
 import type { Run, Stage } from '../stage/stage.ts';
-import type { SoundHandle } from '../sound.ts';
+import { endCue, type SoundHandle } from '../sound.ts';
 import type { Haptic } from '../../lib/haptics.ts';
 
 export type Invite = 'throw' | 'roll' | 'done' | null;
@@ -78,6 +78,9 @@ export interface TableOptions
     reads?: () => 'ltr' | 'rtl';
     onGame?: (side: Side, how: string, points: number) => void;
     onFacts?: (facts: Facts) => void;
+
+    /** The reader's own result once the board has it: the match's end is heard from it, and from the side that won only before it is in hand. */
+    result?: () => Parameters<typeof endCue>[0];
 }
 
 export interface Facts
@@ -1317,10 +1320,19 @@ export function createBackgammonTable(options: TableOptions): BackgammonTable
         {
             await Promise.all([slide(before.men, shown.men, next.transfers, RACK_MOST), moveCube(before.cube, shown.cube)]);
         }
-        else if (at.reader && beat.side === 'near')
+        else
         {
-            options.sound()?.play('win');
-            options.feel('win');
+            const sting = endCue(options.result?.() ?? (at.reader ? (beat.side === 'near' ? 'won' : 'lost') : undefined));
+
+            if (sting !== null)
+            {
+                options.sound()?.play(sting);
+            }
+
+            if (at.reader && sting === 'win')
+            {
+                options.feel('win');
+            }
         }
 
         tell();

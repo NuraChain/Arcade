@@ -11,6 +11,8 @@ const FFMPEG = process.env.FFMPEG ?? 'ffmpeg';
 
 const HOOVES = 'bigsoundbank-0610-horse-trotting.ogg';
 
+const CLOCK = 'bigsoundbank-1372-tic-tac-mechanical-alarm-clock-1.ogg';
+
 /**
  * A take is its pack, its cue, its source and the most of it kept, in seconds, taken from the source's first
  * sound. Each pack is written to a file of its own, which only the tables that play it fetch.
@@ -22,8 +24,16 @@ const HOOVES = 'bigsoundbank-0610-horse-trotting.ogg';
  * chess click: a hoof as loud as the click, a step 4 dB under it on a phone's speaker, a call 6 dB under it.
  */
 export const SOUNDS = [
-    ['common', 'win', 'jingles_PIZZI01.ogg', 1.0],
-    ['common', 'hand-won', 'jingles_PIZZI16.ogg', 0.46],
+    ['common', 'win', 'jingles_PIZZI02.ogg', 0.96, { kbps: 64 }],
+    ['common', 'lose', 'jingles_PIZZI14.ogg', 0.92, { kbps: 64 }],
+    ['common', 'draw', 'jingles_PIZZI13.ogg', 0.88, { kbps: 64 }],
+    ['common', 'hand-won', 'jingles_PIZZI16.ogg', 0.46, { kbps: 64 }],
+    ['common', 'turn', 'jingles_STEEL08.ogg', 0.8, { kbps: 64 }],
+    ['common', 'pass', 'jingles_STEEL09.ogg', 0.59, { kbps: 64 }],
+    ['common', 'chime', 'glass_001.ogg', 0.28, { kbps: 64, gain: -3 }],
+    ['common', 'tick', CLOCK, 0.09, { cuts: [[0.542, 0.612]], tail: 0.03, gain: 4 }],
+    ['common', 'tick-hi', CLOCK, 0.09, { cuts: [[3.518, 3.588]], pitch: 1.12, tail: 0.03, gain: 5 }],
+    ['common', 'deny', 'impactWood_light_001.ogg', 0.22, { cuts: [[0, 0.09], [0, 0.09]], apart: 0.1, tail: 0.04, gain: 4 }],
     ['cards', 'card-slide', 'card-slide-1.ogg', 0.4],
     ['cards', 'card-slide', 'card-slide-5.ogg', 0.4],
     ['cards', 'card-slide', 'card-slide-7.ogg', 0.4],
@@ -88,12 +98,12 @@ function shaped(source, most, shape)
     return [...inputs, '-filter_complex', [...cuts, ...layer, mix].join(';')];
 }
 
-/** The ffmpeg arguments for a take as recorded: from its first sound, the most of it, faded out at the end. */
-function plain(source, most)
+/** The ffmpeg arguments for a take as recorded: from its first sound, the most of it, faded out at the end, at its gain. */
+function plain(source, most, gain = 0)
 {
     const fade = Math.max(0, most - 0.06).toFixed(3);
 
-    return ['-i', join(SOURCE, source), '-af', `silenceremove=start_periods=1:start_threshold=-50dB:start_silence=0.002,atrim=0:${ most },afade=t=out:st=${ fade }:d=0.06`];
+    return ['-i', join(SOURCE, source), '-af', `silenceremove=start_periods=1:start_threshold=-50dB:start_silence=0.002,atrim=0:${ most },afade=t=out:st=${ fade }:d=0.06,volume=${ gain }dB`];
 }
 
 const scratch = mkdtempSync(join(tmpdir(), 'nura-sound-'));
@@ -108,7 +118,7 @@ for (const [pack, cue, source, most, shape] of SOUNDS)
 
     execFileSync(FFMPEG, [
         '-y', '-v', 'error',
-        ...(shape === undefined ? plain(source, most) : shaped(source, most, shape)),
+        ...(shape?.cuts === undefined ? plain(source, most, shape?.gain) : shaped(source, most, shape)),
         '-ac', '1', '-ar', '44100',
         '-c:a', 'libmp3lame', '-b:a', `${ shape?.kbps ?? 96 }k`,
         target

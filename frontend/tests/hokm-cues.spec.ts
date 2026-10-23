@@ -595,14 +595,14 @@ describe('what a hokm table is heard to do', () =>
         expect(ticks(), 'somebody else\'s clock was counted aloud').toBe(0);
     });
 
-    it('ends on the sound of a win for the side that won the match, and on nothing for the side that lost', async () =>
+    it('ends on a win for the side that won the match, and on a falling phrase for the side that lost', async () =>
     {
         const won = await mounted(match({}));
 
         won.send([act(4, 1, { e: 'forfeit', seat: 1 }, { e: 'finish', side: 0 })]);
         await elapse(LONG, 5);
 
-        expect(count('win')).toBe(1);
+        expect([count('win'), count('lose')]).toEqual([1, 0]);
 
         cleanup();
         told.heard.length = 0;
@@ -612,18 +612,38 @@ describe('what a hokm table is heard to do', () =>
         lost.send([act(4, 0, { e: 'forfeit', seat: 0 }, { e: 'finish', side: 1 })]);
         await elapse(LONG, 5);
 
-        expect(count('win')).toBe(0);
+        expect([count('win'), count('lose')]).toEqual([0, 1]);
     });
 
-    it('ends on nothing for somebody watching, whichever side won', async () =>
+    it('ends on a neutral close for somebody watching, whichever side won, and nothing felt', async () =>
     {
         const { send } = await mounted(match({}, null));
 
         send([act(4, 1, { e: 'forfeit', seat: 1 }, { e: 'finish', side: 0 })]);
         await elapse(LONG, 5);
 
-        expect(told.heard).toEqual([]);
+        expect(told.heard).toEqual(['draw']);
         expect(told.felt).toEqual([]);
+    });
+
+    it('hears a kot as a win only on the side that made it', async () =>
+    {
+        const ours = await mounted(match({}));
+
+        ours.send([act(4, 0, { e: 'hand', side: 0, points: 2, kot: true })]);
+        await elapse(LONG, 5);
+
+        expect(count('win')).toBe(1);
+
+        cleanup();
+        told.heard.length = 0;
+
+        const theirs = await mounted(match({}));
+
+        theirs.send([act(4, 0, { e: 'hand', side: 1, points: 2, kot: true })]);
+        await elapse(LONG, 5);
+
+        expect([count('win'), count('hand-won')], 'the side that lost a kot heard it as a win').toEqual([0, 0]);
     });
 
     it('shuffles, then deals the first five to the Hâkem alone at four, and to both players at a table for two', async () =>

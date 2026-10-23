@@ -678,6 +678,34 @@ describe('the backgammon table on the page', () =>
         expect(dice(container)).toEqual([]);
     });
 
+    it('ends as the reader\'s own result says: nothing for a seat left with no contest by an early walkout, a win where it counted', async () =>
+    {
+        const ending = match({ turn: 1, dice: [], phase: 'roll', seats: position({ 6: 15 }, { 6: 15 }) }, 0, { turn: 1 });
+        const ended = (result: 'void' | 'won') => match({ turn: 1, dice: [], phase: 'roll', seats: position({ 6: 15 }, { 6: 15 }) }, 0, {
+            rev: 5,
+            finishedAt: new Date(401_000).toISOString(),
+            players: [
+                { seat: 0, who: 'dana.w', timeouts: 0, result },
+                { seat: 1, who: 'omid.k', timeouts: 0, result: 'abandoned', exit: 'left' }
+            ] as MatchView['players']
+        });
+        const walked = () => [happened(5, 1, [{ e: 'forfeit', seat: 1, reason: 'left' }, { e: 'finish', seat: 0 }])];
+
+        for (const [result, heard] of [['void', []], ['won', ['win']]] as const)
+        {
+            const { tell, unmount } = await live(ending);
+
+            sounds.heard.length = 0;
+            tell(ended(result), walked());
+            await flush();
+            await elapse(3000);
+
+            expect(sounds.heard.filter((cue) => cue === 'win' || cue === 'lose' || cue === 'draw'), result).toEqual(heard);
+
+            unmount();
+        }
+    });
+
     it('says a seat missed its turn only when the table has shown the turn played for it, and goes on saying so until its next turn has been shown', async () =>
     {
         const missing = (view: MatchView, timeouts: number): MatchView =>

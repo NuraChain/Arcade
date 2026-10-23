@@ -124,8 +124,13 @@ export const useCues = createStore((): CuesApi =>
             void import('../game/sound.ts')
                 .then((module) =>
                 {
+                    if (!running)
+                    {
+                        return;
+                    }
+
                     sound ??= module.createSound(true);
-                    sound.play('bonus', { gain: 0.6 });
+                    sound.play('chime', { gain: 0.6 });
                 })
                 .catch(() => undefined);
         };
