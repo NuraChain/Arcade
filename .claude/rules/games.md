@@ -5335,26 +5335,47 @@ switching tables never has to unlock audio again. The spec is
 - **A hidden tab hears only what is urgent** - the turn and the ticks - and the iOS audio session is
   `ambient`, so the silent switch mutes it and it mixes with the player's music.
 - **A bed plays behind a table's page** (`game/bed.ts`, decided by `stores/bed.store.ts`, a chunk
-  of its own that `stores/bed-loader.ts` fetches, so the play route carries none of it): rain
-  (`game/bed-files.ts`, BigSoundBank's "Summer Rain on Terrace", CC0), in the waiting room, at a
-  game and when watching, and on no other page. It is on by default at 40%, and off by default on
-  a device that asked to save data (`background`, `backgroundVolume`, in Settings › Sound, and its
-  switch in the dock and the table's sheet). It plays on the page's own context: two media elements
+  of its own that `stores/bed-loader.ts` fetches, so the play route carries none of it), in the
+  waiting room, at a game and when watching, and on no other page. What plays is the reader's
+  choice (`backgroundKind`): a calm piece of music for each game, which is the default, rain or
+  birds by a stream, one choice for every table (`game/bed-files.ts`, a file a bed; `BEDS` is held
+  by its type to a bed for every game). The music is CC0 from OpenGameArt, chosen by measurement
+  for steady loudness, no drums and a warm spectrum: "Bedazzled" behind Ludo (a bubbly piano),
+  "Town 3" behind Hokm (classical guitar), "Medieval: The Bard's Tale" behind backgammon (lute and
+  flute), "Just you and me" behind poker (jazz guitar) and "Calm Piano 1 (Vaporware)" behind chess;
+  the rain is BigSoundBank's "Summer Rain on Terrace" and the birds its "Forest and Stream #1",
+  both CC0. It is on by default at 40%, and off by default on a device that asked to save data
+  (`background`, `backgroundKind`, `backgroundVolume`, in Settings › Sound, and its switch in the
+  dock and the table's sheet). It plays on the page's own context: two media elements
   from one object URL, each through a gain of its own into a level that is the reader's volume, on
   the engine's `bed` bus, so the loop is handed from one copy to the other over four seconds with
-  their power kept and nothing decoded held in memory. It is fetched only once the page may play
+  their power kept and nothing decoded held in memory. During the hand-over the copy coming in plays
+  the bed's first four seconds over the last four going out, so a piece of music is cut where those
+  sound alike: the same chords frame by frame, the same beat in the same phase and the same
+  loudness, found by measurement in a stretch of the piece, or a loop its composer made with its
+  first four seconds added again at its end (the Bard's Tale). So the two copies have to be in
+  step. A hand-over is timed from the moment the copy going out answered its `play()`, and that
+  copy is heard a moment later, so the hand-over waits for the copy to reach its point rather than
+  trusting the timer: the first walk measured it 252 ms early, the music doubled a quarter second
+  apart for all four seconds of every loop, and the offset was hidden from the check that should
+  have caught it by the clamp at nought. The copy coming in is started as far in as the one going
+  out is past the hand-over, and moved there again once it has started if it strayed more than
+  20 ms (`STRAY`), because it is slow to start too. It is fetched only once the page may play
   sound (`onBed`, which the engine calls each time its context runs), comes in over two seconds,
-  and goes over one when the page does. It sits 9 dB under a call at that table, 6 dB under a
+  and goes over one when the page does. A bed that is heard gives way to another (the next table's
+  game, another choice) by fading out over a second on a level of its own while the other is
+  fetched and comes in (`retire`); one nobody hears is let go at once. It sits 9 dB under a call at that table, 6 dB under a
   game's end for as long as the end sounds (the engine dips its own `bed` bus, `dip`), and is held
   while the tab is hidden, coming back in where it stopped. A browser that will not let it play is
   asked again inside the reader's next press. A later page's hold takes over from the page that is
   leaving, whose late release stops nothing. The arena says what it is doing (`data-bed`:
   `waiting`, `playing`, `ducked`, `paused`). `tools/art/beds.mjs` builds each bed from the stretch
-  kept in `tools/art/bed-src/` to -24 LUFS by a gain, its peaks held a decibel under full scale,
-  MP3 under a neutral `.bed`, and `tools/budgets.mjs` holds each to its ceiling (640 KB for rain
-  or birds, 1 MB for a piece of music). `bed.spec.ts`, `bed-store.spec.ts`, `game.spec.ts` (the
-  context handed over and the dip), `settings.spec.ts`, `play.spec.ts` and `bed-pack.spec.ts`
-  hold it.
+  kept in `tools/art/bed-src/` (each credited, with the seconds it was cut from, in its
+  `LICENSE.txt`) to -24 LUFS by a gain, its peaks held a decibel under full scale, MP3 under a
+  neutral `.bed` (96 kbps for music, 64 for rain and birds), and `tools/budgets.mjs` holds each to
+  its ceiling (640 KB for rain or birds, 1 MB for a piece of music). `bed.spec.ts`,
+  `bed-store.spec.ts`, `game.spec.ts` (the context handed over and the dip), `settings.spec.ts`,
+  `play.spec.ts` and `bed-pack.spec.ts` hold it.
 - **Sound is on by default**, because a native game starts with sound; nothing plays before the first
   tap, and the dock and the table menu turn it off in one press.
 - **Every table sounds like its own pieces, from the server's log.** Hokm's are made by its scenes (below);

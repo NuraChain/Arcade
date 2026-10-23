@@ -4,10 +4,32 @@ Every file here is released under CC0 1.0 Universal:
 https://creativecommons.org/publicdomain/zero/1.0/
 
 Each is the stretch of the original recording that its bed plays, kept so the bed can be built again,
-re-encoded as Ogg Vorbis.
+re-encoded as Ogg Vorbis. A piece of music is cut where its last four seconds sound as its first four
+do, because the player hands its loop over during them.
 
-From BigSoundBank (bigsoundbank.com), sounds by Joseph SARDIN:
+From OpenGameArt (opengameart.org), music whose page lists CC0 among its licences:
 
-- bigsoundbank-1019-summer-rain-on-terrace.ogg, "Summer Rain on Terrace",
+- opengameart-bedazzled.ogg, "Bedazzled" by Kistol, played behind Ludo,
+  from 0.302 to 56.076 seconds of it:
+  https://opengameart.org/content/bedazzled
+- opengameart-town-3.ogg, "Town 3" by Pro Sensory, played behind Hokm,
+  from 31.509 to 93.112 seconds of it:
+  https://opengameart.org/content/town-3
+- opengameart-medieval-the-bards-tale.ogg, "Medieval: The Bard's Tale" by RandomMind, played behind
+  backgammon, the whole of its loop version with its first 4 seconds again at the end:
+  https://opengameart.org/content/medieval-the-bards-tale
+- opengameart-just-you-and-me-guitar.ogg, "Just you and me Guitar" by Pro Sensory, played behind poker,
+  from 10.658 to 71.657 seconds of it:
+  https://opengameart.org/content/just-you-and-me-guitar
+- opengameart-calm-piano-1-vaporware.ogg, "Calm Piano 1 (Vaporware)" by cynicmusic (The Cynic Project),
+  played behind chess, from 41.030 to 122.857 seconds of it:
+  https://opengameart.org/content/calm-piano-1-vaporware
+
+From BigSoundBank (bigsoundbank.com):
+
+- bigsoundbank-1019-summer-rain-on-terrace.ogg, "Summer Rain on Terrace" by Joseph SARDIN,
   the stretch from 93 seconds to the end of it:
   https://bigsoundbank.com/summer-rain-on-terrace-s1019.html
+- bigsoundbank-2713-forest-and-stream-1.ogg, "Forest and Stream #1" by Pierre SIBANARCO,
+  from 228 to 298 seconds of it:
+  https://bigsoundbank.com/forest-and-stream-1-s2713.html

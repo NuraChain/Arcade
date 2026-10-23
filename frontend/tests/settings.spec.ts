@@ -204,7 +204,7 @@ describe('the notification switches', () =>
         const volume = () => section().querySelector<HTMLElement>(`[role="slider"][aria-label="${ useLocale().t('settings.sound.volume') }"]`);
 
         expect(background().getAttribute('aria-checked')).toBe('true');
-        expect(background().textContent).toContain('Gentle rain behind a table');
+        expect(background().textContent).toContain('Something calm behind a table');
         expect(volume()?.getAttribute('aria-valuenow')).toBe('0.4');
         expect(volume()?.getAttribute('aria-valuetext')).toBe('40%');
 
@@ -224,6 +224,54 @@ describe('the notification switches', () =>
         await settle();
 
         expect(volume()?.getAttribute('aria-label')).toBe('بلندی صدای پس‌زمینه');
+    });
+
+    it('choose what plays behind a table, music by default, drawn only while the background is on, in both languages', async () =>
+    {
+        useSettings().reset();
+        useSession().establish(establishAccount());
+        const container = await show(SettingsPage as unknown as () => HTMLElement, '/app/me/settings');
+        const section = () => container.querySelector('#settings-sound')!;
+        const choice = () => section().querySelector<HTMLElement>(`[role="group"][aria-label="${ useLocale().t('settings.sound.kind') }"]`);
+        const options = () => [...choice()!.querySelectorAll<HTMLButtonElement>('button')];
+        const pressed = () => options().filter((one) => one.getAttribute('aria-pressed') === 'true').map((one) => one.textContent?.trim());
+        const background = () => [...section().querySelectorAll<HTMLElement>('[role="switch"]')].find((one) => one.textContent?.includes(useLocale().t('settings.sound.background')))!;
+
+        expect(useSettings().settings().backgroundKind).toBe('music');
+        expect(options().map((one) => one.textContent?.trim())).toEqual(['Music', 'Rain', 'Birds']);
+        expect(pressed()).toEqual(['Music']);
+        expect(section().textContent).toContain('Each game has a calm piece of its own.');
+
+        const kept = choice();
+
+        options()[2].click();
+        await settle();
+
+        expect(useSettings().settings().backgroundKind).toBe('birds');
+        expect(pressed()).toEqual(['Birds']);
+        expect(choice(), 'the choice was drawn again when it was made').toBe(kept);
+        expect(section().textContent).toContain('Birds singing beside a stream in a wood.');
+        expect(section().textContent).not.toContain('Each game has a calm piece of its own.');
+
+        options()[1].click();
+        await settle();
+
+        expect(useSettings().settings().backgroundKind).toBe('rain');
+        expect(section().textContent).toContain('Gentle rain falling on a terrace.');
+
+        background().click();
+        await settle();
+
+        expect(choice(), 'a choice of what nobody hears is drawn').toBeNull();
+
+        useLocale().setLocale('fa');
+        background().click();
+        await settle();
+
+        expect(options().map((one) => one.textContent?.trim())).toEqual(['موسیقی', 'بارون', 'پرنده‌ها']);
+        expect(pressed()).toEqual(['بارون']);
+        expect(choice()?.getAttribute('aria-label')).toBe('چی پخش بشه');
+        expect(section().textContent).toContain('صدای بارون آرومی که روی ایوون می‌باره.');
     });
 
     it('start the background off on a device that asked to save data', () =>

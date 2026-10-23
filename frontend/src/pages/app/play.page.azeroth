@@ -333,13 +333,13 @@ export default component PlayPage()
 
     state bed: BedState = 'off';
 
-    derived audible = table !== null && table.id === mine && table.status !== 'closed';
+    derived backdrop = table !== null && table.id === mine && table.status !== 'closed' ? table.game : '';
 
     effect
     {
-        if (audible)
+        if (backdrop !== '')
         {
-            const quiet = startBed(mine, (state) => bed = state);
+            const quiet = startBed(mine, backdrop as GameId, (state) => bed = state);
 
             onCleanup(() =>
             {

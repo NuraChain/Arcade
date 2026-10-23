@@ -20,10 +20,18 @@ const EDGE = 0.5;
  * (its page and the seconds it was cut from are in `bed-src/LICENSE.txt`), brought to one loudness by a
  * gain and never by squeezing it, its peaks held a decibel under full scale, faded at each end, and
  * written as MP3 at `kbps` under a neutral extension (`.bed`), because a download manager empties any
- * `.mp3` a page fetches.
+ * `.mp3` a page fetches. A piece of music is cut where its last four seconds sound as its first four do, because
+ * the player hands its loop from one copy to the other during them: a stretch found by measurement, or a loop its
+ * composer made with its first four seconds again at its end.
  */
 export const BEDS = [
-    ['rain', 'bigsoundbank-1019-summer-rain-on-terrace.ogg', { kbps: 64 }]
+    ['ludo', 'opengameart-bedazzled.ogg', { kbps: 96 }],
+    ['hokm', 'opengameart-town-3.ogg', { kbps: 96 }],
+    ['backgammon', 'opengameart-medieval-the-bards-tale.ogg', { kbps: 96 }],
+    ['poker', 'opengameart-just-you-and-me-guitar.ogg', { kbps: 96 }],
+    ['chess', 'opengameart-calm-piano-1-vaporware.ogg', { kbps: 96 }],
+    ['rain', 'bigsoundbank-1019-summer-rain-on-terrace.ogg', { kbps: 64 }],
+    ['birds', 'bigsoundbank-2713-forest-and-stream-1.ogg', { kbps: 64 }]
 ];
 
 const loudnessOf = (file) =>

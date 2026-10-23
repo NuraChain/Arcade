@@ -2,6 +2,7 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 import { BEDS } from '../../frontend/src/game/bed-files.ts';
+import { GAMES } from '../../frontend/src/data/games.ts';
 
 const beds = new URL('../../frontend/src/game/sound/beds/', import.meta.url);
 
@@ -23,6 +24,12 @@ describe('the beds a table plays behind its game', () =>
         expect(built).toEqual(Object.keys(BEDS).sort());
         expect(rows.map((row) => row.name).sort()).toEqual(built);
         expect(readdirSync(beds).filter((name) => !name.endsWith('.bed')), 'something that is no bed lies among the beds').toEqual([]);
+    });
+
+    it('hold a piece of music for every game, and rain and birds beside them', () =>
+    {
+        expect(Object.keys(BEDS).sort()).toEqual([...GAMES.map((game) => game.id), 'birds', 'rain'].sort());
+        expect(rows.map((row) => row.source).filter((source, index, all) => all.indexOf(source) !== index), 'two beds are made from one source').toEqual([]);
     });
 
     it('are MP3 inside their neutral extension', () =>

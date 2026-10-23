@@ -33,6 +33,9 @@ export const DUCK = 10 ** (-9 / 20);
 /** How quickly a new volume, or a call coming or going, is followed. */
 const EASE = 0.4;
 
+/** How far the copy coming in may stray from where the copy going out says it should be, in seconds. */
+const STRAY = 0.02;
+
 const GESTURES = ['pointerup', 'touchend', 'click', 'keydown'] as const;
 
 interface Copy
@@ -62,7 +65,9 @@ export function createBed(told: (state: BedState) => void = () => undefined): Be
     let copies: Copy[] = [];
     let lead = 0;
     let context: AudioContext | null = null;
+    let bus: AudioNode | null = null;
     let level: GainNode | null = null;
+    const fading = new Set<() => void>();
     let playing = false;
     let attempt = 0;
     let era = 0;
@@ -224,10 +229,30 @@ export function createBed(told: (state: BedState) => void = () => undefined): Be
             return;
         }
 
-        const at = context.currentTime;
+        const early = from.element.duration - CROSS - from.element.currentTime;
 
-        to.element.currentTime = 0;
-        void Promise.resolve(to.element.play()).catch(() => undefined);
+        // A copy is heard a moment after its play() is answered, so a hand-over timed from that answer comes
+        // early by that moment: it waits for the copy going out to reach it.
+        if (early > STRAY)
+        {
+            timer = runtime().clock.after(early * 1000, cross);
+            return;
+        }
+
+        const at = context.currentTime;
+        const mine = attempt;
+        const due = () => Math.max(0, from.element.currentTime - (from.element.duration - CROSS));
+
+        // The copy coming in plays the bed's first seconds over the last ones going out, which a piece of music
+        // is cut to match: a hand-over that came late, or a copy slow to start, is put where the other says.
+        to.element.currentTime = due();
+        void Promise.resolve(to.element.play()).then(() =>
+        {
+            if (mine === attempt && Math.abs(to.element.currentTime - due()) > STRAY)
+            {
+                to.element.currentTime = due();
+            }
+        }, () => undefined);
         curve(from.gain, false, at);
         curve(to.gain, true, at);
         lead = 1 - lead;
@@ -336,6 +361,21 @@ export function createBed(told: (state: BedState) => void = () => undefined): Be
         say(want.ducked ? 'ducked' : 'playing');
     };
 
+    const discard = (gone: Copy[], address: string) =>
+    {
+        for (const one of gone)
+        {
+            one.element.pause();
+            one.element.removeAttribute('src');
+            one.gain?.disconnect();
+        }
+
+        if (address !== '')
+        {
+            URL.revokeObjectURL(address);
+        }
+    };
+
     /** Forgets the bed in hand, its copies and its address, and keeps the context and the level. */
     const drop = () =>
     {
@@ -344,28 +384,48 @@ export function createBed(told: (state: BedState) => void = () => undefined): Be
         playing = false;
         stopTimer();
         unwait();
-
-        for (const one of copies)
-        {
-            one.element.pause();
-            one.element.removeAttribute('src');
-            one.gain?.disconnect();
-        }
-
+        discard(copies, blob);
         copies = [];
         lead = 0;
+        blob = '';
+        url = '';
+    };
 
-        if (blob !== '')
+    /** A bed that is heard gives way to another over `FADE_OUT`, on a level of its own, while the other is fetched. */
+    const retire = () =>
+    {
+        const old = level;
+
+        if (!playing || context === null || old === null || bus === null)
         {
-            URL.revokeObjectURL(blob);
-            blob = '';
+            return;
         }
 
-        url = '';
+        const gone = copies;
+        const address = blob;
+        let cancel: () => void = () => undefined;
+
+        const end = () =>
+        {
+            fading.delete(end);
+            cancel();
+            discard(gone, address);
+            old.disconnect();
+        };
+
+        copies = [];
+        blob = '';
+        glide(old.gain, 0, FADE_OUT);
+        level = context.createGain();
+        level.gain.value = 0;
+        level.connect(bus);
+        cancel = runtime().clock.after(FADE_OUT * 1000, end);
+        fading.add(end);
     };
 
     const load = (address: string) =>
     {
+        retire();
         drop();
         url = address;
 
@@ -410,6 +470,7 @@ export function createBed(told: (state: BedState) => void = () => undefined): Be
 
             level?.disconnect();
             context = running;
+            bus = into;
             level = running.createGain();
             level.gain.value = 0;
             level.connect(into);
@@ -435,12 +496,19 @@ export function createBed(told: (state: BedState) => void = () => undefined): Be
     const release = () =>
     {
         drop();
+
+        for (const end of [...fading])
+        {
+            end();
+        }
+
         failed = '';
         unhook?.();
         unhook = null;
         level?.disconnect();
         level = null;
         context = null;
+        bus = null;
         handle?.dispose();
         handle = null;
     };

@@ -115,6 +115,9 @@ class FakeAudio
 
     public static refuse = false;
 
+    /** Each play asked for while this is set waits here until the spec lets it start. */
+    public static slow: (() => void)[] | null = null;
+
     public preload = '';
 
     public src = '';
@@ -141,7 +144,10 @@ class FakeAudio
 
         this.paused = false;
         this.plays += 1;
-        return Promise.resolve();
+
+        const waiting = FakeAudio.slow;
+
+        return waiting === null ? Promise.resolve() : new Promise<void>((resolve) => waiting.push(resolve));
     }
 
     public pause()
@@ -169,6 +175,8 @@ class FakeAudio
 }
 
 const RAIN = '/assets/rain-abc.bed';
+
+const MUSIC = '/assets/hokm-def.bed';
 
 let clock: ManualClock;
 let bed: Bed;
@@ -208,6 +216,8 @@ const run = async (context = new FakeContext()) =>
 
 const levelOf = (context: FakeContext) => context.gains.find((gain) => gain.to === bus)!;
 
+const levelsOf = (context: FakeContext) => context.gains.filter((gain) => gain.to === bus);
+
 const copyGain = (context: FakeContext, element: FakeAudio) => context.sources.get(element)!;
 
 beforeEach(() =>
@@ -219,6 +229,7 @@ beforeEach(() =>
     fetched = [];
     FakeAudio.made = [];
     FakeAudio.refuse = false;
+    FakeAudio.slow = null;
     engine.listeners.clear();
     engine.handles = 0;
     engine.disposed = 0;
@@ -283,6 +294,7 @@ describe('the bed behind a table', () =>
 
         expect(second.paused, 'the hand-over came early').toBe(true);
 
+        first.currentTime = 60 - CROSS;
         await elapse(1);
 
         const falling = copyGain(context, first).gain.steps.find((step) => step.kind === 'curve')!;
@@ -304,10 +316,191 @@ describe('the bed behind a table', () =>
 
         expect(first.paused).toBe(true);
 
+        second.currentTime = 60 - CROSS;
         await elapse((60 - CROSS - CROSS) * 1000);
 
         expect(first.paused, 'the loop was handed over only once').toBe(false);
         expect(first.currentTime).toBe(0);
+    });
+
+    it('starts the copy coming in as far into the bed as the copy going out is past the hand-over, when the hand-over came late', async () =>
+    {
+        bed.set(want());
+        await run();
+        const [first, second] = FakeAudio.made;
+
+        await elapse((60 - CROSS) * 1000 - 1);
+        first.currentTime = 60 - CROSS + 0.015;
+        await elapse(1);
+
+        expect(second.paused).toBe(false);
+        expect(second.currentTime, 'the copy coming in started from its beginning, closer than a resync would move it').toBeCloseTo(0.015, 6);
+    });
+
+    it('waits for the copy going out when the hand-over falls due before that copy has reached it', async () =>
+    {
+        bed.set(want());
+        const context = await run();
+        const [first, second] = FakeAudio.made;
+
+        first.currentTime = 60 - CROSS - 0.25;
+        await elapse((60 - CROSS) * 1000);
+
+        expect(second.paused, 'the hand-over began a quarter of a second before the copy going out had reached it').toBe(true);
+        expect(copyGain(context, first).gain.steps.some((step) => step.kind === 'curve')).toBe(false);
+
+        first.currentTime = 60 - CROSS;
+        await elapse(250);
+
+        expect(second.paused).toBe(false);
+        expect(second.currentTime).toBe(0);
+        expect(copyGain(context, second).gain.steps.some((step) => step.kind === 'curve')).toBe(true);
+    });
+
+    it('puts a copy that was slow to start where the copy going out says it should be, and leaves one that is close enough', async () =>
+    {
+        bed.set(want());
+        await run();
+        const [first, second] = FakeAudio.made;
+        const started: (() => void)[] = [];
+
+        FakeAudio.slow = started;
+        first.currentTime = 60 - CROSS;
+        await elapse((60 - CROSS) * 1000);
+
+        expect(second.currentTime).toBe(0);
+
+        first.currentTime = 60 - CROSS + 0.08;
+        started[0]();
+        await flush();
+
+        expect(second.currentTime, 'the copy coming in was left behind the one going out').toBeCloseTo(0.08, 6);
+
+        second.currentTime = CROSS;
+        await elapse(CROSS * 1000);
+        second.currentTime = 60 - CROSS;
+        await elapse((60 - CROSS - CROSS) * 1000);
+
+        expect(started, 'the loop was not handed back').toHaveLength(2);
+
+        first.currentTime = 0.011;
+        second.currentTime = 60 - CROSS + 0.02;
+        started[1]();
+        await flush();
+
+        expect(first.currentTime, 'a copy close enough to where it belongs was moved').toBe(0.011);
+    });
+
+    it('moves no copy the bed has stopped since it asked it to play', async () =>
+    {
+        bed.set(want());
+        await run();
+        const [first, second] = FakeAudio.made;
+        const started: (() => void)[] = [];
+
+        FakeAudio.slow = started;
+        first.currentTime = 60 - CROSS;
+        await elapse((60 - CROSS) * 1000);
+        bed.set(want({ hidden: true }));
+        first.currentTime = 60 - CROSS + 0.5;
+        bed.set(want());
+        await flush();
+        started[0]();
+        await flush();
+
+        expect(started, 'the bed did not come back when the tab was seen').toHaveLength(2);
+        expect(second.currentTime, 'a copy the bed had stopped and started again was moved for the hand-over before').toBe(0);
+    });
+
+    it('gives way to another bed: the one heard fades out over a second on a level of its own while the other is fetched and comes in', async () =>
+    {
+        bed.set(want());
+        const context = await run();
+        const [first, second] = FakeAudio.made;
+        const old = levelOf(context);
+
+        vi.mocked(URL.createObjectURL).mockReturnValueOnce('blob:music');
+        bed.set(want({ url: MUSIC }));
+
+        expect(old.gain.heading()).toEqual({ kind: 'ramp', value: 0, at: 10 + FADE_OUT });
+        expect(first.paused, 'the bed heard stopped without fading').toBe(false);
+        expect(revoked).toEqual([]);
+
+        await flush();
+
+        const [third, fourth] = FakeAudio.made.slice(2);
+        const fresh = levelsOf(context).find((one) => one !== old)!;
+
+        expect(fetched).toEqual([RAIN, MUSIC]);
+        expect(third.src).toBe('blob:music');
+        expect(third.paused).toBe(false);
+        expect(fourth.paused).toBe(true);
+        expect(copyGain(context, third).to, 'the new bed came in on the level the old one fades out on').toBe(fresh);
+        expect(fresh.gain.heading()).toEqual({ kind: 'ramp', value: 0.4, at: 10 + FADE_IN });
+        expect(states.at(-1)).toBe('playing');
+
+        await elapse(FADE_OUT * 1000 - 1);
+
+        expect(first.paused, 'the bed heard was cut before its fade had ended').toBe(false);
+
+        await elapse(1);
+
+        expect(first.paused).toBe(true);
+        expect(first.src).toBe('');
+        expect(second.src).toBe('');
+        expect(revoked).toEqual(['blob:rain']);
+        expect(old.to).toBeNull();
+        expect(levelsOf(context)).toEqual([fresh]);
+        expect(third.paused).toBe(false);
+    });
+
+    it('changes beds at once when nothing is heard', async () =>
+    {
+        bed.set(want());
+        const context = await run();
+        const [first] = FakeAudio.made;
+
+        bed.set(want({ hidden: true }));
+        bed.set(want({ url: MUSIC, hidden: true }));
+
+        expect(first.src).toBe('');
+        expect(revoked).toEqual(['blob:rain']);
+
+        await flush();
+
+        expect(levelsOf(context)).toHaveLength(1);
+        expect(FakeAudio.made[2].paused).toBe(true);
+        expect(states.at(-1)).toBe('paused');
+    });
+
+    it('fetches only the bed wanted when it changes before anything could play', async () =>
+    {
+        bed.set(want());
+        bed.set(want({ url: MUSIC }));
+        await run();
+
+        expect(fetched).toEqual([MUSIC]);
+    });
+
+    it('lets a bed that is fading out go at once when the bed itself is let go of', async () =>
+    {
+        bed.set(want());
+        const context = await run();
+        const [first] = FakeAudio.made;
+
+        vi.mocked(URL.createObjectURL).mockReturnValueOnce('blob:music');
+        bed.set(want({ url: MUSIC }));
+        await flush();
+        bed.dispose();
+
+        expect(first.paused).toBe(true);
+        expect(first.src).toBe('');
+        expect([...revoked].sort()).toEqual(['blob:music', 'blob:rain']);
+        expect(levelsOf(context)).toEqual([]);
+
+        await elapse(FADE_OUT * 1000);
+
+        expect(revoked).toHaveLength(2);
     });
 
     it('sits 9 dB under a call at the table and comes back up after it, and follows a new volume', async () =>
@@ -402,6 +595,7 @@ describe('the bed behind a table', () =>
         expect(level.gain.heading()?.value).toBe(0.4);
         expect(states.at(-1)).toBe('playing');
 
+        first.currentTime = 60 - CROSS;
         await elapse((60 - CROSS) * 1000);
 
         expect(FakeAudio.made[1].paused, 'the loop stopped being handed over').toBe(false);

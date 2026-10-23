@@ -18,7 +18,7 @@ import type { MatchView } from '../src/api.ts';
 import ChatPage from '../src/pages/app/chat.page.azeroth';
 import PlayPage from '../src/pages/app/play.page.azeroth';
 import { gameArt, gameIcon } from '../src/components/games/art.ts';
-import { GAMES } from '../src/data/games.ts';
+import { GAMES, type GameId } from '../src/data/games.ts';
 import { defaultTable } from '../src/data/tables.ts';
 import { resetChunks } from '../src/lib/chunks.ts';
 import { manualClock, type ManualClock } from '../src/lib/clock.ts';
@@ -52,6 +52,21 @@ type Rendered = HTMLElement;
 const chunk = vi.hoisted(() => ({ asked: 0 }));
 
 const sheetSize = vi.hoisted(() => ({ forced: null as null | { pad: number; height: number }, fold: null as null | boolean }));
+
+const beds = vi.hoisted(() => ({ asked: [] as string[] }));
+
+vi.mock('../src/stores/bed-loader.ts', async (real) =>
+{
+    const actual = await real<typeof import('../src/stores/bed-loader.ts')>();
+
+    return {
+        startBed: (...args: Parameters<typeof actual.startBed>) =>
+        {
+            beds.asked.push(args[1]);
+            return actual.startBed(...args);
+        }
+    };
+});
 
 vi.mock('../src/lib/sheet-room.ts', async (real) =>
 {
@@ -3699,10 +3714,10 @@ describe('the table’s chat and its controls', () =>
         });
     };
 
-    const open = async (posture: 'phone' | 'rail' | 'sidebar') =>
+    const open = async (posture: 'phone' | 'rail' | 'sidebar', game: GameId = 'ludo') =>
     {
         useDevice().override(posture);
-        const id = await useLobby().host('ludo', defaultTable('ludo'), []);
+        const id = await useLobby().host(game, defaultTable(game), []);
         const table: Route[] = [{ path: '/app/play/:id', component: (): HTMLElement => PlayPage() as HTMLElement }];
         const router = createRouter({ routes: table, history: createMemoryHistory(`/app/play/${ id }`), scroll: false });
         const { container } = renderTest(() => RouterProvider({ router, children: () => Routes({}) }) as Rendered);
@@ -3728,11 +3743,18 @@ describe('the table’s chat and its controls', () =>
     it('plays the background behind the table\'s page and says on the arena what it is doing, until it is switched off', async () =>
     {
         useSettings().update({ background: true });
+        beds.asked = [];
 
-        const container = await open('sidebar');
+        const container = await open('sidebar', 'chess');
         const said = () => container.querySelector('[data-bed]')?.getAttribute('data-bed') ?? null;
 
         await vi.waitFor(() => expect(said(), 'the bed is not waiting for the page to be let play').toBe('waiting'), { timeout: 4000 });
+        expect(beds.asked, 'the bed was asked for another game than the table\'s').toEqual(['chess']);
+
+        await useLobby().refresh();
+        await settle();
+
+        expect(beds.asked, 'the bed was asked for again when the table was read again').toEqual(['chess']);
 
         useSettings().update({ background: false });
         await settle();

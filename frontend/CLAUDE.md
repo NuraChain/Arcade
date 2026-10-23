@@ -199,7 +199,7 @@ for this device"); the account's two buttons stand at the end of its row from 42
 `settings.spec.ts` (*the page of settings*) holds the seven sections as the children of one
 column and no `grid-cols-` anywhere under it. Sound is the table's own sound and the horse and the
 elephant of chess, which stood among the notification switches though neither tells anybody anything,
-and the background behind a table with its volume, which is drawn only while the background is on. The voice section is three panels, the microphone,
+and the background behind a table with what plays (each game's own music, rain or birds) and its volume, both drawn only while the background is on. The voice section is three panels, the microphone,
 what is heard and the table's own switches, drawn by `components/voice/` (*Settings › Voice* in
 `.claude/rules/games.md`), and the same spec holds each of them in it.
 

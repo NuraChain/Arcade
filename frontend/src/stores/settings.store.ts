@@ -7,6 +7,7 @@ export interface Settings
     sound: boolean;
     animalSounds: boolean;
     background: boolean;
+    backgroundKind: BedChoice;
     backgroundVolume: number;
     haptics: boolean;
     railOpen: boolean;
@@ -40,6 +41,9 @@ export interface Settings
     noticeSeen: string;
 }
 
+/** What plays behind a table: each game's own piece of music, rain, or birds by a stream. */
+export type BedChoice = 'music' | 'rain' | 'birds';
+
 export type VoiceNoise = 'off' | 'standard' | 'strong';
 
 export type VoiceQuality = 'standard' | 'high' | 'best';
@@ -56,6 +60,7 @@ export function defaultSettings(): Settings
         sound: true,
         animalSounds: true,
         background: !savingData(),
+        backgroundKind: 'music',
         backgroundVolume: 0.4,
         haptics: true,
         railOpen: false,

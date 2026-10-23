@@ -9,6 +9,7 @@ import Button from '../../components/ui/button.component.azeroth';
 import Pagination from '../../components/ui/pagination.component.azeroth';
 import Rail from '../../components/ui/rail.component.azeroth';
 import SectionHeading from '../../components/ui/section-heading.component.azeroth';
+import Segmented from '../../components/ui/segmented.component.azeroth';
 import Slider from '../../components/ui/slider.component.azeroth';
 import Toggle from '../../components/ui/switch.component.azeroth';
 import { NURA_CHAIN } from '../../data/chain.ts';
@@ -28,7 +29,7 @@ import { useDevice } from '../../stores/device.store.ts';
 import { pagingFor, visible } from '../../lib/pagination.ts';
 import { usePageParams } from '../../lib/page-param.ts';
 import { useLocale } from '../../stores/locale.store.ts';
-import { useSettings } from '../../stores/settings.store.ts';
+import { useSettings, type BedChoice } from '../../stores/settings.store.ts';
 import { useSocial } from '../../stores/social.store.ts';
 import { useToasts } from '../../stores/toasts.store.ts';
 import { useVault } from '../../stores/vault.store.ts';
@@ -79,6 +80,8 @@ export default component SettingsPage()
     derived current = settings.settings();
 
     derived background = current.background;
+
+    derived bedHint = locale.t(`settings.sound.kindHint.${ current.backgroundKind }`);
 
     derived vaulted = vaults.open();
 
@@ -471,6 +474,21 @@ export default component SettingsPage()
                                     onChange={ (checked) => settings.update({ background: checked }) }
                                 />
                                 <Show when={ background }>
+                                    <div class="flex max-w-md flex-col gap-2 px-1 py-2">
+                                        <span class="text-ui-md font-semibold text-text">{ locale.t('settings.sound.kind') }</span>
+                                        <Segmented
+                                            items={ [
+                                                { id: 'music', label: locale.t('settings.sound.kind.music') },
+                                                { id: 'rain', label: locale.t('settings.sound.kind.rain') },
+                                                { id: 'birds', label: locale.t('settings.sound.kind.birds') }
+                                            ] }
+                                            value={ current.backgroundKind }
+                                            label={ locale.t('settings.sound.kind') }
+                                            block={ true }
+                                            onChange={ (id) => settings.update({ backgroundKind: id as BedChoice }) }
+                                        />
+                                        <p class="text-ui-xs text-muted">{ bedHint }</p>
+                                    </div>
                                     <Slider
                                         value={ current.backgroundVolume }
                                         min={ 0 }
