@@ -1,4 +1,4 @@
-export type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'ghost' | 'bare' | 'destructive' | 'live';
+export type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'ghost' | 'bare' | 'destructive' | 'destructive-ghost' | 'live';
 export type ButtonSize = 'xs' | 'sm' | 'md' | 'lg';
 export type Tone = 'neutral' | 'accent' | 'live' | 'gold' | 'win' | 'danger' | 'madder';
 export type AvatarSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl' | '2xl';
@@ -16,6 +16,7 @@ export const BUTTON_VARIANT: Record<ButtonVariant, string> = {
     ghost: 'text-muted hover:bg-raised hover:text-text',
     bare: 'text-muted hover:text-text',
     destructive: 'bg-danger/15 text-danger hover:bg-danger/25',
+    'destructive-ghost': 'text-danger hover:bg-danger/10 active:bg-danger/15',
     live: 'bg-live text-bright-ink hover:brightness-110 active:brightness-95'
 };
 

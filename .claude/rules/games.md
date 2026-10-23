@@ -566,7 +566,11 @@ svg from `backgammon-layout.ts`, whose `SPIKES` the board now takes from there t
 - **Under the table**: one status line (what is being waited for, or for somebody standing, that
   they are only looking, and how many seats are free), then the ONE action that matters (Take a
   seat, I'm ready, Start the game with the ready toggle still under it), then Copy link, Leave and,
-  for the host, Close. The play page's own start panel, standing panel and close button moved in
+  for the host, Close. Close is the last row, under a hairline (`data-close`), as wide as the
+  buttons above it and in red words with no red block (`destructive-ghost`), a soft red ground only
+  under a pointer: the owner found the small red pill it had been, floating under two large buttons
+  beside Leave's red, "too ugly", and a rare way out that ends the table for everybody is the
+  quietest thing in the room. The play page's own start panel, standing panel and close button moved in
   as props (`onStart`, `onSit`, `removed`, `onClose`), and the room is shown to `lobbyOpen ||
   standing`: somebody standing sees the table as it stands. Every word is the one it was, so every
   pass that presses one by name still finds it.

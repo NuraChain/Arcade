@@ -397,8 +397,8 @@ export default component LobbyPanel(props: {
             </div>
             <Show when={ closable }>
                 { () =>
-                    <div class="flex justify-center">
-                        <Button variant="destructive" size="sm" leading="close" onClick={ () => props.onClose?.() }>
+                    <div class="border-t border-line pt-2" data-close>
+                        <Button variant="destructive-ghost" size="md" block leading="close" onClick={ () => props.onClose?.() }>
                             { locale.t('play.close.confirm') }
                         </Button>
                     </div>

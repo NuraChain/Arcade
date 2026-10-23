@@ -791,6 +791,19 @@ describe('the lobby as the table about to be played', () =>
         expect(button(drawn({}), useLocale().t('play.close.confirm'))).toBeUndefined();
     });
 
+    it('puts the closing of the table last, under a line, as wide as the buttons above it and in red words with no red block', () =>
+    {
+        const container = drawn({ onClose: vi.fn() });
+        const close = button(container, useLocale().t('play.close.confirm'))!;
+        const row = close.closest<HTMLElement>('[data-close]')!;
+        const classes = close.className.split(' ');
+
+        expect(container.querySelector('.lobby-acts')?.lastElementChild).toBe(row);
+        expect(row.className.split(' ')).toEqual(expect.arrayContaining(['border-t', 'border-line']));
+        expect(classes).toEqual(expect.arrayContaining(['w-full', 'text-danger']));
+        expect(classes.filter((one) => one.startsWith('bg-'))).toEqual([]);
+    });
+
     it('keeps the board a waiting Ludo table is drawn with when the table is read again', () =>
     {
         const [held, setHeld] = createSignal(table({ game: 'ludo', seats: 4 }));
