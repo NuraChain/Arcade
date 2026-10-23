@@ -19,7 +19,7 @@ const viewOf = (state: ChessState) => chessEngine.view(state, null) as Board;
 const fresh = () => chessEngine.create([0, 1], ONE, { target: 0, cube: false, blinds: 'low', variant: 'standard' }).state;
 
 /** A position from FEN with both sides past their first move, White at seat 0, after a dozen moves. */
-const at = (fen: string, over: Partial<ChessState> = {}): Board => viewOf({ ...fresh(), position: parseFen(fen)!, moved: [true, true], ply: 24, ...over });
+const at = (fen: string, over: Partial<ChessState> = {}) => viewOf({ ...fresh(), position: parseFen(fen)!, moved: [true, true], ply: 24, ...over });
 
 const keyOf = (view: Board, mine: number | undefined, left: number | null = null) => coachOf(view, mine, left)?.key ?? null;
 

@@ -113,7 +113,12 @@ describe('the moves of a chess game', () =>
     it('takes a move in where it stands, the rows kept, and moves the mark to it', async () =>
     {
         const [current, setCurrent] = createSignal(match({ notation: LEGAL.slice(0, 12), ply: 12 }));
-        const { container } = renderTest(() => ChessMoves({ get match() { return current(); } }) as Rendered);
+        const { container } = renderTest(() => ChessMoves({
+            get match()
+            {
+                return current();
+            }
+        }) as Rendered);
 
         await flush();
 
