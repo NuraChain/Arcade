@@ -171,7 +171,7 @@ const TONES: Record<Tone, readonly Voice[]> = {
     ]
 };
 
-const JINGLES: ReadonlySet<Cue> = new Set<Cue>(['win', 'lose', 'draw', 'hand-won']);
+const JINGLES: ReadonlySet<Cue> = new Set<Cue>(['win', 'lose', 'draw', 'hand-won', 'six', 'home']);
 
 /** What the table says rather than what is on it: as quiet as these were while they were synthesised. */
 const INTERFACE: ReadonlySet<Cue> = new Set<Cue>(['turn', 'tick', 'tick-hi', 'deny', 'pass', 'chime']);

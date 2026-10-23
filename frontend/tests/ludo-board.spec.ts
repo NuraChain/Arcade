@@ -1150,7 +1150,7 @@ describe('a ludo roll, played', () =>
         play([act], sight(state));
         await elapse(thrown(act).duration + 20);
 
-        expect(cues).toEqual([...thrown(act).impacts.map(() => 'die-land'), 'bonus']);
+        expect(cues).toEqual([...thrown(act).impacts.map(() => 'die-land'), 'six']);
         expect(cube().hasAttribute('data-spent')).toBe(false);
         expect(passes).toEqual([]);
     });
@@ -1211,7 +1211,7 @@ describe('a ludo roll, played', () =>
         await elapse(thrown(wasted.act).duration + 20);
 
         expect(cube().dataset.spent).toBe('wasted');
-        expect(cues).toEqual([...lands(wasted.act), 'bonus']);
+        expect(cues).toEqual([...lands(wasted.act), 'six']);
         expect(passes).toEqual([[0, 6, 'wasted']]);
     });
 

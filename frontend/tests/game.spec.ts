@@ -686,7 +686,7 @@ describe('the sound layer', () =>
 
     it('plays a recording at the level of what it is: what the table says as quietly as its tones were, the end as a jingle, the pieces as foley', async () =>
     {
-        vi.stubGlobal('fetch', () => Promise.resolve({ ok: true, arrayBuffer: () => Promise.resolve(pack({ 'turn': [[1]], 'chime': [[2]], 'win': [[3]], 'pawn-step': [[4]] })) }));
+        vi.stubGlobal('fetch', () => Promise.resolve({ ok: true, arrayBuffer: () => Promise.resolve(pack({ 'turn': [[1]], 'chime': [[2]], 'win': [[3]], 'pawn-step': [[4]], 'six': [[5]] })) }));
         const fake = stub();
         const sound = createSound(true, 'ludo');
 
@@ -698,8 +698,9 @@ describe('the sound layer', () =>
         sound.play('chime');
         sound.play('win');
         sound.play('pawn-step');
+        sound.play('six');
 
-        expect(fake.levels()).toEqual([0.45, 0.45, 0.6, 0.9]);
+        expect(fake.levels()).toEqual([0.45, 0.45, 0.6, 0.9, 0.6]);
 
         sound.dispose();
     });

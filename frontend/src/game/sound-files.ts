@@ -4,7 +4,7 @@ import type { GameId } from '../data/games.ts';
 export const CUES = {
     common: ['turn', 'tick', 'tick-hi', 'deny', 'pass', 'chime', 'win', 'lose', 'draw', 'hand-won'],
     cards: ['card-slide', 'card-place', 'card-gather', 'card-shuffle', 'card-fan'],
-    ludo: ['die-shake', 'die-land', 'pawn-step', 'pawn-hit', 'pawn-yard'],
+    ludo: ['die-shake', 'die-land', 'pawn-step', 'pawn-hit', 'pawn-yard', 'six', 'home'],
     backgammon: ['cup-shake', 'dice-wood', 'checker', 'checker-hit', 'checker-bar', 'checker-off'],
     poker: ['chip-lay', 'chips-stack'],
     chess: ['piece-move', 'piece-capture', 'horse-step', 'horse-call', 'elephant-step', 'elephant-call', 'king-fall']

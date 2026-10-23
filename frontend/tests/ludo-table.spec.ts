@@ -1241,6 +1241,40 @@ describe('the ludo table, played from what happened', () =>
         expect(pawn(container, '0-0').style.translate).toBe(onSquare('red', 13));
     });
 
+    it('rings the turn as the table shows it coming round, and as the server says it on a page nobody is looking at', async () =>
+    {
+        quiet();
+
+        const before = standing([EMPTY, EMPTY], null, 0);
+        const rolled = stepped(before, { kind: 'roll', seat: 0, die: 3 });
+        const turns = () => sounds.heard.filter((cue) => cue === 'turn').length;
+        const looked = await live(seen(before, 1, 1));
+
+        sounds.heard.length = 0;
+        looked.tell(seen(rolled.state, 1, 2), [happened(2, 0, rolled.moves)]);
+        await flush();
+
+        expect(turns(), 'the turn was rung before the other seat\'s die was thrown').toBe(0);
+
+        await elapse(3000);
+
+        expect(turns(), 'the turn was not rung once the table had shown it coming round').toBe(1);
+
+        cleanup();
+        useBoard().close();
+
+        const hidden = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+        const away = await live(seen(before, 1, 1));
+
+        sounds.heard.length = 0;
+        away.tell(seen(rolled.state, 1, 2), [happened(2, 0, rolled.moves)]);
+        await flush();
+
+        expect(turns(), 'a page nobody is looking at was not told its turn had come').toBe(1);
+
+        hidden.mockRestore();
+    });
+
     const seated = async (first: MatchView) =>
     {
         matches.view = async () => first;

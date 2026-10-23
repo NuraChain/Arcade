@@ -184,6 +184,8 @@ export default component MatchBoard(props: { match: MatchView; events: EventBatc
 
     derived shownTurn = facts === null ? game.turn : (facts.turn ?? undefined);
 
+    derived shownYours = !over && mine !== undefined && mine === shownTurn;
+
     derived shownControls = facts === null || shownTurn === undefined
         ? ludo.controls
         : ((facts.home[shownTurn] ?? 0) === TOKENS_PER_PLAYER ? (partnerOf(shownTurn, { seats: game.seats, variant: variantOf(sided) }) ?? shownTurn) : shownTurn);
@@ -378,11 +380,13 @@ export default component MatchBoard(props: { match: MatchView; events: EventBatc
         }
     }
 
+    // A hidden page plays nothing until it is seen, so there the turn is rung as the server says it.
     effect
     {
-        const mineNow = yours;
+        const told = yours;
+        const shown = shownYours;
 
-        untrack(() => chime(mineNow));
+        untrack(() => chime(typeof document !== 'undefined' && document.visibilityState === 'hidden' ? told : shown));
     }
 
     effect

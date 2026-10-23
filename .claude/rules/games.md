@@ -4818,7 +4818,7 @@ the air, on the board, leaving it, or on a plate.
   yard (`dieRest`), 1.2 squares across (`DIE_SIZE`), where it meets no seat of the nest, no home
   slot and not the hand. The plan is seeded by the match and the revision, so both players and
   somebody watching see one throw. `die-land` sounds at every bounce, softer each time, and
-  `bonus` for a six that keeps the turn.
+  `six` for a six that keeps the turn.
 - **A roll that waits for its move lies where it fell for 1.1 s** (`DIE_REST_MS`, outside the
   queue: rule 8), is picked up outward over its corner, and is then on its roller's plate. The
   plate's die is the same drawing at rest (`DieFace`), named "You rolled 3." on the reader's own
@@ -4862,6 +4862,22 @@ on a manual clock with the real engine's events, and `ludo-table.spec.ts` the co
 in the hand and under the press, the hold and each thing it holds, the three sentences in both
 languages, the plate's die and its two names, and the die handed over only when the table has
 shown the turn. Each was run against the fault it is there for.
+
+**A Ludo table sounds like plastic on a printed board.** A pawn's step is a
+short light drop (Kenney Interface Sounds' `drop_002` and `drop_003`, about 780 Hz), where it was a
+knock of wood at 340 Hz; a capture is a bright clack (`impactPlate_light`, cut to 0.16 s, 1.2 kHz)
+and the pawn landing in its yard a lower drop (`drop_004` played at 0.82, 625 Hz). The knock and
+the drop were 15 and 19 dB under the chess click on a phone's speaker, their energy near 100 Hz,
+and are now within 2 dB of it. A landing take is ONE hit of a die (the hits found by their onsets
+in four of Kenney's throws), because `die-land` is played once a bounce: the old takes were
+0.35 s of a throw, two or three hits each, so every bounce rattled. The shake has three takes. A
+six and a pawn home are flourishes of their own on the jingle bus (`six`, `jingles_HIT16`, two
+rising notes; `home`, `jingles_HIT01`, four), where they borrowed synthesised tones, one of them
+backgammon's cube's. And the turn is rung as the table shows it coming round (`shownYours`): rung
+as the server said it, it came before the other player's die was thrown. A hidden page plays
+nothing until it is seen, so there it is rung as the server says it, and the edge `turnChime`
+keeps means coming back does not ring it twice. `ludo-table.spec.ts` (*rings the turn as the table
+shows it coming round*) holds both pages.
 
 **A press the server will not take is walked back, and a pressed roll hurries the table.** The
 reader's pawn walks at the press, so a refusal finds it somewhere it never was. It used to slide
@@ -5214,7 +5230,7 @@ switching tables never has to unlock audio again. The spec is
   `king-fall`. The neutral extension is load-bearing: a download manager (IDM and its kind, common
   among Persian users) intercepts any `.mp3` a page fetches and hands the page an empty 204, which
   is how the first build of this was silent on the owner's own machine while curl got a perfect 200.
-  Trump, trick, bonus, home, check and promote are still synthesised. A recording that failed to
+  Trump, trick, bonus (backgammon's cube), check and promote are still synthesised. A recording that failed to
   load falls back to its synthesised voice or to silence and never throws, which keeps "nothing can
   404 halfway through a game" true in behaviour; every shared cue but a won hand has a voice
   (`TONES`), so a clock, a refusal and the end of a game are heard while `common` is on its way.
@@ -5268,7 +5284,7 @@ switching tables never has to unlock audio again. The spec is
   (*The knight is a horse and the bishop an elephant*, under *Chess*), in chess's own pack.
   `TurnClock` takes `yours` and ticks for every game with a mechanical clock's tic at five, four and
   three seconds and its tac, a little higher, at two and one, with one `warn` buzz at five. The
-  toasts' chime is a soft glass bell from the shared pack (`chime`; it borrowed the six's `bonus`),
+  toasts' chime is a soft glass bell from the shared pack (`chime`; it borrowed Ludo's `bonus`),
   and one asked for as the cues store stops is not played: the handle it would make is one that
   nothing lets go of, and the next spec heard it.
 

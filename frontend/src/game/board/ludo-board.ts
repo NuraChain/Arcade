@@ -991,7 +991,7 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
         {
             if (beat.face === 6)
             {
-                sound()?.play('bonus');
+                sound()?.play('six');
             }
 
             plateDie = shown.die;
@@ -1001,7 +1001,7 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
             return;
         }
 
-        sound()?.play(beat.fate === 'three-sixes' ? 'deny' : (beat.fate === 'wasted' ? 'bonus' : 'pass'));
+        sound()?.play(beat.fate === 'three-sixes' ? 'deny' : (beat.fate === 'wasted' ? 'six' : 'pass'));
 
         if (reader && beat.fate === 'three-sixes')
         {
