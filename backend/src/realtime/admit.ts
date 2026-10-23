@@ -28,8 +28,8 @@ export interface AdmitOptions
  * Three refusals, in cost order:
  *
  * 1. The origin union. `isSameOrigin` alone breaks the QA run, where the browser is on
- *    `localhost:3200` and `PUBLIC_ORIGIN` is `localhost:3100`; `config.origin` alone breaks it
- *    the other way, where the browser and the server share `:3200`. Both are ordinary
+ *    `localhost:4900` and `PUBLIC_ORIGIN` is `localhost:3100`; `config.origin` alone breaks it
+ *    the other way, where the browser and the server share `:4900`. Both are ordinary
  *    deployments, so the gate is the union and is no weaker than the framework's default.
  * 2. A missing or opaque Origin is refused. Stricter than the default, and right: this endpoint
  *    serves browsers, and a browser always sends one.

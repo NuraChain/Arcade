@@ -168,7 +168,7 @@ describe('the root .env', () =>
     {
         const into: NodeJS.ProcessEnv = { PORT: '5300' };
 
-        adopt('PORT=3200\nAPI_RATE_MAX=600\n', into);
+        adopt('PORT=4900\nAPI_RATE_MAX=600\n', into);
 
         expect(into).toEqual({ PORT: '5300', API_RATE_MAX: '600' });
     });
