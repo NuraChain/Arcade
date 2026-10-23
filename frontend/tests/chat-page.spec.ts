@@ -1113,6 +1113,7 @@ describe('a line the reader edits from the page', () =>
         const container = opened(thread.id, 'sidebar');
 
         await vi.waitFor(() => expect(field(container)?.disabled).toBe(false), { timeout: 4000 });
+        await vi.waitFor(() => expect(useChat().messages().some((one) => one.id === line.id)).toBe(true), { timeout: 4000 });
 
         useChat().setDraft(thread.id, 'half a thought');
         await settle();
