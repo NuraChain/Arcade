@@ -4422,9 +4422,16 @@ the fit cell and on the result's tab alike (`.chess-stage :is(.table-fit, .table
 - **A chat beside a sideways phone takes its room from the table, never from the clocks.** The
   sheet lay over the rails' column, so at 844x390 both clocks were under the chat. Beside a chat
   (`[data-beside]`) the fit cell gives up the sheet's width (`padding-inline-end: var(--beside)`),
-  the rails' column is 8.5rem, and a rail keeps its face, its name and its clock (the trays, the
+  the rails' column is 7rem, and a rail keeps its face, its name and its clock (the trays, the
   draw offer and the lamp go, as under a half sheet). Measured at 844x390: a board of 296px and
-  both clocks clear of the chat, which begins 9px after the rails end.
+  both clocks clear of the chat, which begins 9px after the rails end. The column was 8.5rem until
+  the fit pass's chess cells measured 740x360 with the chat open: a board of 192px, squares of 21px;
+  at 7rem it is 216px.
+- **A half sheet is told the least this layout needs.** The chat's half sheet is sized from the
+  table's `--fit-min`, and chess's said what its upright layout needs (a rail over the board and
+  one under it). Under a half sheet the two rails share one row, so the sheet was held back and
+  then laid itself over the last 8px of the board at 360x640; `[data-sheet]` says one row of rails
+  and a board of 15rem.
 - **The result folded away waits between the two rails.** "Show the result" stood at the foot of
   the stage, which beside the board is the board's own last rank and coordinates. In the wide
   layout it is the width of the rails' column and in the middle of its height, between the two

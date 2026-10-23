@@ -5,6 +5,7 @@ import { play as englishPlay } from '../../frontend/src/locales/en/play.ts';
 import { play as persianPlay } from '../../frontend/src/locales/fa/play.ts';
 import { BASE, clearTables, walletSeat, launch, recorder, seat, waitFor } from './seats.mjs';
 import { tableBody } from './tables.mjs';
+import { squareNamed } from '../../backend/src/domains/match/chess/board.ts';
 
 const OUT = join(import.meta.dirname, 'out', 'fit', new Date().toISOString().replace(/[:.]/g, '-'));
 
@@ -43,17 +44,26 @@ const GAMES = [
     { id: 'backgammon', game: 'backgammon', seats: 2, mode: 'turns', target: 3 },
     { id: 'ludo-4', game: 'ludo', seats: 4, mode: 'turns', target: 0, also: [BROWSER_BARS] },
     { id: 'ludo-4-rolled', game: 'ludo', seats: 4, mode: 'turns', target: 0, stop: 'rolled', viewers: ['turn', 'waiting'], also: [BROWSER_BARS] },
-    { id: 'ludo-4-teams', game: 'ludo', seats: 4, mode: 'turns', target: 0, teams: true, also: [BROWSER_BARS] }
+    { id: 'ludo-4-teams', game: 'ludo', seats: 4, mode: 'turns', target: 0, teams: true, also: [BROWSER_BARS] },
+    { id: 'chess', game: 'chess', seats: 2, mode: 'live', target: 0, stop: 'opened', viewers: ['turn', 'waiting'], also: [BROWSER_BARS] },
+    { id: 'chess-traded', game: 'chess', seats: 2, mode: 'live', target: 0, stop: 'traded', viewers: ['turn', 'waiting'] }
 ];
+
+/** What is played before a chess cell is measured: both sides past their first move, so no clock calls the game off while it is measured; or a middle game with pieces taken on both sides and one side seven ahead. */
+const CHESS_LINES = {
+    opened: [['e2', 'e4'], ['e7', 'e5']],
+    traded: [['e2', 'e4'], ['e7', 'e5'], ['g1', 'f3'], ['d7', 'd6'], ['f1', 'c4'], ['c8', 'g4'], ['b1', 'c3'], ['g7', 'g6'], ['f3', 'e5'], ['g4', 'd1'], ['c4', 'f7'], ['e8', 'e7']]
+};
 
 const USABLE = {
     hokm: { wide: [288, 192], tall: [192, 288], card: 36 },
     poker: { wide: [320, 200], tall: [250, 312], card: 0 },
     backgammon: { wide: [256, 209], tall: [256, 209], card: 0 },
-    ludo: { wide: [208, 208], tall: [208, 208], card: 0 }
+    ludo: { wide: [208, 208], tall: [208, 208], card: 0 },
+    chess: { wide: [208, 208], tall: [208, 208], card: 0 }
 };
 
-const FILLS = { tall: 0.85, wide: 0.7, trick: 0.15, phone: 480, card: [56, 79], short: 0.12, shows: 22.5, board: 44, boardShare: 0.124, lean: 0.75, grand: 1700, grandShare: 0.055, seats: 0.7, pips: 20 };
+const FILLS = { tall: 0.85, wide: 0.7, trick: 0.15, phone: 480, card: [56, 79], short: 0.12, shows: 22.5, board: 44, boardShare: 0.124, lean: 0.75, grand: 1700, grandShare: 0.055, seats: 0.7, pips: 20, square: 30 };
 
 const LANGUAGES = {
     en: { locale: 'en-US', show: englishPlay['play.table.chatShow'], hide: englishPlay['play.table.chatHide'], raise: [englishPlay['poker.raise'], englishPlay['poker.bet']] },
@@ -230,6 +240,18 @@ const advance = async (spec, table) =>
         if (spec.game === 'backgammon' && state.view.phase === 'roll')
         {
             await play(actor, table.matchId, state.rev, { kind: 'backgammon', verb: 'roll' }, key);
+        }
+
+        if (spec.game === 'chess')
+        {
+            for (const [nth, [from, to]] of CHESS_LINES[spec.stop].entries())
+            {
+                const now = await matchOf(table.players[0], table.matchId);
+
+                await play(table.bySeat.get(now.turn), table.matchId, now.rev, { kind: 'chess', verb: 'move', from: squareNamed(from), to: squareNamed(to) }, `fit-chess-${ nth }-${ table.matchId }`);
+            }
+
+            return;
         }
 
         if (spec.game === 'ludo' && spec.stop === 'rolled')
@@ -717,6 +739,46 @@ const measure = async (page, rules) => await page.evaluate((given) =>
             if (figures.some((one) => one < given.fills.pips))
             {
                 found.push({ kind: 'small', what: `the pips are written at ${ Math.min(...figures) }px, under ${ given.fills.pips }` });
+            }
+        }
+
+        if (surface.classList.contains('chess-board') && stage !== null && !given.openChat)
+        {
+            const room = box(stage);
+            const rails = [...document.querySelectorAll('.chess-rail')].filter(shown).map(box);
+            const clocks = [...document.querySelectorAll('.chess-rail .chess-clock')].filter(shown);
+            const all = [drawn, ...rails];
+            const tall = (Math.max(...all.map((one) => one.bottom)) - Math.min(...all.map((one) => one.top))) / room.height;
+            const square = drawn.width * 112 / 1000;
+
+            if (rails.length !== 2)
+            {
+                found.push({ kind: 'small', what: `${ rails.length } sides are drawn at a chess board, where there are two` });
+            }
+
+            if (rails.some((one) => meets(one, drawn)))
+            {
+                found.push({ kind: 'small', what: 'a side lies on the chess board' });
+            }
+
+            if (clocks.length !== 2)
+            {
+                found.push({ kind: 'small', what: `${ clocks.length } clocks are drawn at a live chess table, where there are two` });
+            }
+
+            if (clocks.some((one) => one.scrollWidth > one.clientWidth + 1))
+            {
+                found.push({ kind: 'small', what: 'a chess clock is cut short' });
+            }
+
+            if (square < given.fills.square)
+            {
+                found.push({ kind: 'small', what: `a square of the chess board is ${ square.toFixed(1) }px, under ${ given.fills.square }` });
+            }
+
+            if (room.height > room.width && tall < given.fills.seats)
+            {
+                found.push({ kind: 'small', what: `the board and its two sides take ${ Math.round(tall * 100) }% of an upright stage's height, under ${ given.fills.seats * 100 }%` });
             }
         }
 
@@ -1456,6 +1518,11 @@ try
 
         if (!keep)
         {
+            for (const view of views.values())
+            {
+                await view.page.goto('about:blank').catch(() => null);
+            }
+
             for (const player of table.players)
             {
                 await player.api('POST', `/tables/${ table.tableId }/leave`, { forfeit: true }).catch(() => null);

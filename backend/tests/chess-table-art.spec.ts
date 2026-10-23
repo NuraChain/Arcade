@@ -115,10 +115,10 @@ describe('the sides of a chess table', () =>
         expect(beside).toMatch(/\n    \.chess-stage \.table-fit > \.table-surface\n    \{[^}]*\n        inline-size: 100%;/);
     });
 
-    it('give a chat beside a sideways phone its room, so both clocks stay out from under it', () =>
+    it('give a chat beside a sideways phone its room, so both clocks stay out from under it and the board keeps squares a finger can take', () =>
     {
         expect(ruleOf('[data-beside] .chess-stage .table-fit')).toContain('\n    padding-inline-end: var(--beside);');
-        expect(beside).toContain('\n    [data-beside] .chess-stage :is(.table-fit, .table-result-tab)\n    {\n        --side: 8.5rem;');
+        expect(beside).toContain('\n    [data-beside] .chess-stage :is(.table-fit, .table-result-tab)\n    {\n        --side: 7rem;');
         expect(ruleOf('[data-beside] .chess-tray,\n[data-beside] .chess-offer,\n[data-beside] .chess-rail .coach-line')).toContain('display: none;');
     });
 
@@ -127,9 +127,10 @@ describe('the sides of a chess table', () =>
         expect(beside).toMatch(/\n    \.chess-stage > \.table-result-tab\n    \{[^}]*\n        inset-inline-end: calc\(var\(--beside, 0px\) \+ \(var\(--room\) - var\(--board-w\) - 0\.75rem - var\(--side\)\) \/ 2\);[^}]*\n        inline-size: var\(--side\);[^}]*\n        translate: 0 -50%;/);
     });
 
-    it('share one row over the board while the chat is open beside it', () =>
+    it('share one row over the board while the chat is open beside it, and tell the sheet the least that layout needs', () =>
     {
         expect(ruleOf('[data-sheet] .chess-stage .table-fit')).toContain("grid-template-areas: 'them me' 'board board';");
+        expect(ruleOf('[data-sheet] .chess-stage .table-fit')).toContain('--fit-min: calc(15rem + var(--rail-min) + var(--gap));');
     });
 
     it('light the clock that is running, and turn it red when it runs low', () =>

@@ -5670,7 +5670,7 @@ button.chess-san:hover
 
     [data-beside] .chess-stage :is(.table-fit, .table-result-tab)
     {
-        --side: 8.5rem;
+        --side: 7rem;
     }
 
     .chess-stage .table-fit
@@ -5757,6 +5757,7 @@ button.chess-san:hover
     --rail-min: 3.25rem;
     --board-w: min(100cqw, 100cqh - var(--rail-min) - var(--gap));
     --rail: var(--rail-min);
+    --fit-min: calc(15rem + var(--rail-min) + var(--gap));
 
     display: grid;
     grid-template-columns: repeat(2, calc(min(100cqw + var(--bleed, 0px), 100cqh - var(--rail-min) - var(--gap)) / 2 - var(--gap) / 2));

@@ -106,6 +106,17 @@ pass is a reason to run the WHOLE pass once**, not only its own cells. A pass th
 its tables in `dana.w`'s list: the matrix that ran next found a real overflow that way, and
 nothing should count on it.
 
+**Chess has two cells**: the opening with both clocks running (both sides past their first move,
+so the first-move clock calls nothing off while the cell is measured) and a middle game with
+pieces taken on both sides and one side seven ahead, each read from the side on turn and the side
+waiting. A chess board is measured for two sides and two clocks, neither lying on the board, no
+clock cut short, and, outside the chat, squares of at least 30px. Their first run found the board
+at 192px beside a chat on a 740x360 phone and a half sheet over its last 8px at 360x640, both
+fixed in the layout (`games.md`, *Chess*). It also logged a refused read of a table's chat from a
+page whose player was taken off the table by the pass: a page left open on a table its player
+leaves from somewhere else reads the room once more while the leave lands. The pass parks every
+page it holds before its players leave, which is the order a person's own leave has.
+
 ## The responsive matrix
 
 `npm run qa` drives a real browser over every route at 320–1920, portrait and landscape, in both
