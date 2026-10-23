@@ -79,6 +79,7 @@ export const chessEngine: Engine<ChessState, ChessAction> = {
             ply: state.ply,
             ...(state.last === null ? {} : { last: { ...state.last } }),
             ...(state.clock === null ? {} : { clock: { base: state.clock.base, increment: state.clock.increment, left: [...state.clock.left] } }),
+            notation: [...state.notation],
             moved: [...state.moved],
             ...(state.offer === null ? {} : { offer: state.offer }),
             offered: [...state.offered],

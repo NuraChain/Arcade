@@ -4426,6 +4426,22 @@ some), and the sweep plays the same flag at the deadline whether or not anybody 
 ("By checkmate", "On time", "By agreement", `chess.reason.*`), and a draw is the draw every game
 reads (*A draw is a result*, under *What a game leaves behind*).
 
+**The board carries the game's moves, and a Moves tab beside the chat reads them.** The engine
+writes each move as it plays it (`notation`, the same SAN with `+` or `#` that the move's event
+carries), every reader's view has the whole list, a watcher's included, and the wire holds each to
+twelve characters. A state from before the list has none and is not read with one made up: nothing
+has shipped, so such a database is rebuilt, and the walk's was. Beside Chat and Players a chess
+table has Moves (`ChessMoves`, while a chess game is on the page): the moves by number with White's
+first, in figurine notation (the piece is drawn from the ivory set whichever side moved it, because
+the ebony ones vanish into the dark panel, `figuresOf`), the newest marked and scrolled into view as
+it lands, left to right in Persian as a printed score sheet is, and each said to a screen reader as
+"7. Nd5#". Copy PGN writes the export format (`lib/pgn.ts`): the seven tags with the date in UTC,
+the time control in seconds, the moves under eighty columns with a move's number kept on the line
+of its move (the walk's mate in eight put "8." at the end of one line and "Nd5#" at the start of
+the next), and the result, `*` for a game still going or one called off. `chess-moves.spec.ts`,
+`pgn.spec.ts`, `table-chat.spec.ts` (*the moves beside a chess table's chat*) and `chess-seam.spec.ts`
+hold it.
+
 **The waiting room is the board between two chairs** (`.lobby-board[data-board='chess']`, the
 board's own drawing), as backgammon's is.
 

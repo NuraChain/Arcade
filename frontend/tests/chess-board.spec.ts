@@ -68,6 +68,7 @@ const match = (view: Partial<Chess> = {}, mine: number | null = 0, over: Partial
         ...fen(START),
         ply: 0,
         clock: { base: 600_000, increment: 0, left: [600_000, 600_000] },
+        notation: [],
         moved: [true, true],
         offered: [-1, -1],
         ...view

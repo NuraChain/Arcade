@@ -120,6 +120,26 @@ describe('chess behind the seam', () =>
         }
     });
 
+    it('carries on its board every move played so far, as the log told it, at every move of whole games', () =>
+    {
+        type Told = { e: string; san?: string };
+
+        for (const { states, batches } of GAMES)
+        {
+            states.forEach((state, at) =>
+            {
+                const told = batches.slice(0, at + 1)
+                    .flatMap((events) => (chessEngine.log(events, null) as { moves: Told[] }).moves)
+                    .filter((move) => move.e === 'move')
+                    .map((move) => move.san);
+                const view = chessEngine.view(state, null) as { notation: string[] };
+
+                expect(view.notation).toEqual(told);
+                expect(view.notation).toHaveLength(state.ply);
+            });
+        }
+    });
+
     it('tells every move of whole games in a log the wire takes', () =>
     {
         for (const { batches } of GAMES)

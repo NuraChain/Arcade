@@ -1,0 +1,137 @@
+import { untrack } from 'azerothjs';
+
+import Button from '../ui/button.component.azeroth';
+import { copyText } from '../../lib/clipboard.ts';
+import { pgnOf, type PgnGame } from '../../lib/pgn.ts';
+import { chessOf } from '../../data/match.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import type { MatchView } from '../../api.ts';
+
+const PIECE = /^[KQRBN]/;
+
+const PROMOTED = /=([QRBN])/;
+
+const NEAR_END = 24;
+
+/**
+ * A move as a score sheet in figurine notation draws it: the piece that moved, the squares, the piece
+ * a pawn became. Every figure is drawn from the ivory set, whichever side moved, as a printed sheet
+ * draws one shape a piece: the column says the side, and an ebony figure is lost on a dark panel.
+ */
+export function figuresOf(san: string)
+{
+    const lead = PIECE.test(san) ? `w${ san[0].toLowerCase() }` : undefined;
+    const body = lead === undefined ? san : san.slice(1);
+    const promoted = PROMOTED.exec(body);
+
+    return promoted === null
+        ? { lead, head: body, promo: undefined, tail: '' }
+        : { lead, head: body.slice(0, promoted.index), promo: `w${ promoted[1].toLowerCase() }`, tail: body.slice(promoted.index + 2) };
+}
+
+/** A game's result as PGN writes it: who won, a draw, or nothing for a game called off or still going. */
+const resultOf = (match: MatchView): PgnGame['result'] =>
+{
+    const over = chessOf(match)?.over;
+
+    if (match.finishedAt === undefined || over === undefined || over.reason === 'abort')
+    {
+        return '*';
+    }
+
+    if (over.winner === undefined)
+    {
+        return '1/2-1/2';
+    }
+
+    return over.winner === chessOf(match)?.white ? '1-0' : '0-1';
+};
+
+export default component ChessMoves(props: { match: MatchView })
+{
+    const locale = useLocale();
+
+    derived view = chessOf(props.match);
+
+    derived notation = view?.notation ?? [];
+
+    derived plies = notation.map((san, ply) => ({ ply, n: Math.floor(ply / 2) + 1, white: ply % 2 === 0, ...figuresOf(san), san }));
+
+    derived played = notation.length > 0;
+
+    derived last = notation.length - 1;
+
+    let list: HTMLElement | null = null;
+    let near = true;
+
+    effect
+    {
+        void notation.length;
+
+        untrack(() =>
+        {
+            if (list !== null && near)
+            {
+                list.scrollTop = list.scrollHeight;
+            }
+        });
+    }
+
+    const whoAt = (seat: number) => props.match.players.find((one) => one.seat === seat)?.who ?? '';
+
+    const copy = () =>
+    {
+        const match = props.match;
+        const board = chessOf(match);
+
+        if (board === null)
+        {
+            return;
+        }
+
+        void copyText(pgnOf({
+            site: location.origin,
+            date: new Date(match.startedAt),
+            white: whoAt(board.white),
+            black: whoAt(1 - board.white),
+            result: resultOf(match),
+            ...(board.clock === undefined ? {} : { clock: { base: board.clock.base, increment: board.clock.increment } }),
+            notation: board.notation
+        }), 'chess.moves.copied', { dedupe: 'pgn' });
+    };
+
+    <section class="flex min-h-0 flex-1 flex-col" aria-label={ locale.t('chess.moves.title') }>
+        <Show when={ played } fallback={ <p class="m-auto px-4 py-8 text-center text-ui-sm text-muted">{ locale.t('chess.moves.none') }</p> }>
+            { () =>
+                <ol
+                    class="chess-moves"
+                    role="list"
+                    dir="ltr"
+                    ref={ (element) => list = element }
+                    onScroll={ () =>
+                    {
+                        near = list === null || list.scrollHeight - list.scrollTop - list.clientHeight < NEAR_END;
+                    } }
+                >
+                    <For each={ plies } key={ (one) => one.ply } let={ one }>
+                        <li class="contents" role="listitem">
+                            <span class="chess-moves-n" data-black={ one.white ? undefined : 'true' } aria-hidden="true">{ `${ locale.n(one.n) }.` }</span>
+                            <span class="chess-san" data-last={ one.ply === last ? 'true' : undefined }>
+                                <span class="flex items-center" aria-hidden="true">
+                                    <i class="chess-figure" data-piece={ one.lead }></i>
+                                    <span>{ one.head }</span>
+                                    <i class="chess-figure" data-piece={ one.promo }></i>
+                                    <span>{ one.tail }</span>
+                                </span>
+                                <span class="sr-only">{ `${ locale.n(one.n) }${ one.white ? '.' : '...' } ${ one.san }` }</span>
+                            </span>
+                        </li>
+                    </For>
+                </ol>
+            }
+        </Show>
+        <footer class="flex shrink-0 justify-end border-t border-line px-3 py-2">
+            <Button variant="secondary" size="sm" leading="copy" disabled={ !played } onClick={ copy }>{ locale.t('chess.moves.copy') }</Button>
+        </footer>
+    </section>
+}

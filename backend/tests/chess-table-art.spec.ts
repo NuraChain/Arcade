@@ -44,7 +44,7 @@ describe('the chess set the board is drawn in', () =>
 
         for (const name of PIECES)
         {
-            expect(ruleOf(`:is(.cp, .chess-promote-piece, .chess-taken > i)[data-piece='${ name }']`), name).toContain(`background-image: url('/board/chess/${ name }.svg');`);
+            expect(ruleOf(`:is(.cp, .chess-promote-piece, .chess-taken > i, .chess-figure)[data-piece='${ name }']`), name).toContain(`background-image: url('/board/chess/${ name }.svg');`);
         }
 
         expect(ruleOf('.chess-wood')).toContain("background: url('/board/chess/board.svg') center / 100% 100% no-repeat;");

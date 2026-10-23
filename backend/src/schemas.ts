@@ -1882,6 +1882,7 @@ export const chessBoard = object({
         increment: number({ int: true, min: 0, max: 600_000 }),
         left: array(chessBank, { min: 2, max: 2 })
     }).optional(),
+    notation: array(string({ max: 12 })),
     moved: array(boolean(), { min: 2, max: 2 }),
     offer: chessSeat.optional(),
     offered: array(number({ int: true, min: -1, max: 9999 }), { min: 2, max: 2 }),

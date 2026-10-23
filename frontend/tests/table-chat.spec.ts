@@ -823,3 +823,87 @@ describe('a line the reader edits at a table', () =>
         expect(container.querySelector('[data-editing]')).toBeNull();
     });
 });
+
+describe('the moves beside a chess table\'s chat', () =>
+{
+    const seated = async (game: 'chess' | 'ludo') =>
+    {
+        const lobby = useLobby();
+        const tableId = await lobby.host(game, { ...defaultTable(game), seats: 2 }, []);
+        const held = server.tables.find((one) => one.id === tableId)!;
+
+        held.chairs[1] = { seat: 1, who: 'sara.k', ready: true, host: false };
+        held.taken = 2;
+        held.matchId = 'live-moves';
+
+        (client.matches as unknown as Record<string, unknown>).view = async () => ({
+            id: 'live-moves',
+            tableId,
+            game,
+            rev: 4,
+            seats: 2,
+            players: [{ seat: 0, who: 'alex', timeouts: 0, side: 0 }, { seat: 1, who: 'sara.k', timeouts: 0, side: 1 }],
+            turn: 0,
+            mine: 0,
+            startedAt: new Date(400_000).toISOString(),
+            view: game === 'chess'
+                ? {
+                    kind: 'chess',
+                    white: 0,
+                    board: 'RNBQKB.RPPPP.PPP.....N......P.......p.......pppp.ppprnbqkbnr',
+                    turn: 'w',
+                    castling: 'KQkq',
+                    halfmove: 1,
+                    fullmove: 3,
+                    ply: 3,
+                    notation: ['e4', 'e5', 'Nf3'],
+                    moved: [true, true],
+                    offered: [-1, -1]
+                }
+                : {
+                    kind: 'ludo',
+                    moves: [],
+                    controls: 0,
+                    seats: ['red', 'yellow'].map((colour, seat) => ({ seat, colour, tokens: [0, 1, 2, 3].map((piece) => ({ piece, at: -1 })), home: 0, out: false, side: seat }))
+                }
+        }) as MatchView;
+
+        lobby.open(tableId);
+        await lobby.refresh();
+        useBoard().open('live-moves');
+        await settle();
+
+        const container = shown('conv-a');
+
+        await settle();
+
+        return container;
+    };
+
+    afterEach(() =>
+    {
+        useBoard().close();
+        delete (client.matches as unknown as Record<string, unknown>).view;
+    });
+
+    it('offers the moves as a third tab at a chess table, and lists them when it is pressed', async () =>
+    {
+        const container = await seated('chess');
+        const tab = pressable(container, useLocale().t('play.tab.moves'));
+
+        expect(tab).toBeDefined();
+        expect(container.querySelector('.chess-moves')).toBeNull();
+
+        fire(tab, 'click');
+        await settle();
+
+        expect([...container.querySelectorAll('.chess-san .sr-only')].map((one) => one.textContent)).toEqual(['1. e4', '1... e5', '2. Nf3']);
+    });
+
+    it('offers no moves at a table of another game', async () =>
+    {
+        const container = await seated('ludo');
+
+        expect(pressable(container, useLocale().t('play.tab.moves'))).toBeUndefined();
+    });
+});

@@ -29,6 +29,9 @@ export interface ChessState
     /** The repetition key of every position since the last capture or pawn move, the newest last. */
     keys: string[];
 
+    /** Every move played, in standard algebraic notation, the first first. */
+    notation: string[];
+
     /** By seat: whether that seat has made its first move, before which its clock does not run. */
     moved: boolean[];
 

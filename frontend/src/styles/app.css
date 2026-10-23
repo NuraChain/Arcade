@@ -5166,62 +5166,62 @@ svg.lobby-board
     will-change: translate;
 }
 
-:is(.cp, .chess-promote-piece, .chess-taken > i)[data-piece='wk']
+:is(.cp, .chess-promote-piece, .chess-taken > i, .chess-figure)[data-piece='wk']
 {
     background-image: url('/board/chess/wk.svg');
 }
 
-:is(.cp, .chess-promote-piece, .chess-taken > i)[data-piece='bk']
+:is(.cp, .chess-promote-piece, .chess-taken > i, .chess-figure)[data-piece='bk']
 {
     background-image: url('/board/chess/bk.svg');
 }
 
-:is(.cp, .chess-promote-piece, .chess-taken > i)[data-piece='wq']
+:is(.cp, .chess-promote-piece, .chess-taken > i, .chess-figure)[data-piece='wq']
 {
     background-image: url('/board/chess/wq.svg');
 }
 
-:is(.cp, .chess-promote-piece, .chess-taken > i)[data-piece='bq']
+:is(.cp, .chess-promote-piece, .chess-taken > i, .chess-figure)[data-piece='bq']
 {
     background-image: url('/board/chess/bq.svg');
 }
 
-:is(.cp, .chess-promote-piece, .chess-taken > i)[data-piece='wr']
+:is(.cp, .chess-promote-piece, .chess-taken > i, .chess-figure)[data-piece='wr']
 {
     background-image: url('/board/chess/wr.svg');
 }
 
-:is(.cp, .chess-promote-piece, .chess-taken > i)[data-piece='br']
+:is(.cp, .chess-promote-piece, .chess-taken > i, .chess-figure)[data-piece='br']
 {
     background-image: url('/board/chess/br.svg');
 }
 
-:is(.cp, .chess-promote-piece, .chess-taken > i)[data-piece='wb']
+:is(.cp, .chess-promote-piece, .chess-taken > i, .chess-figure)[data-piece='wb']
 {
     background-image: url('/board/chess/wb.svg');
 }
 
-:is(.cp, .chess-promote-piece, .chess-taken > i)[data-piece='bb']
+:is(.cp, .chess-promote-piece, .chess-taken > i, .chess-figure)[data-piece='bb']
 {
     background-image: url('/board/chess/bb.svg');
 }
 
-:is(.cp, .chess-promote-piece, .chess-taken > i)[data-piece='wn']
+:is(.cp, .chess-promote-piece, .chess-taken > i, .chess-figure)[data-piece='wn']
 {
     background-image: url('/board/chess/wn.svg');
 }
 
-:is(.cp, .chess-promote-piece, .chess-taken > i)[data-piece='bn']
+:is(.cp, .chess-promote-piece, .chess-taken > i, .chess-figure)[data-piece='bn']
 {
     background-image: url('/board/chess/bn.svg');
 }
 
-:is(.cp, .chess-promote-piece, .chess-taken > i)[data-piece='wp']
+:is(.cp, .chess-promote-piece, .chess-taken > i, .chess-figure)[data-piece='wp']
 {
     background-image: url('/board/chess/wp.svg');
 }
 
-:is(.cp, .chess-promote-piece, .chess-taken > i)[data-piece='bp']
+:is(.cp, .chess-promote-piece, .chess-taken > i, .chess-figure)[data-piece='bp']
 {
     background-image: url('/board/chess/bp.svg');
 }
@@ -5544,6 +5544,69 @@ svg.lobby-board
     block-size: 1.5rem;
     padding-inline: 0.5rem;
     white-space: nowrap;
+}
+
+.chess-moves
+{
+    display: grid;
+    flex: 1 1 auto;
+    grid-template-columns: 2.25rem minmax(0, 1fr) minmax(0, 1fr);
+    align-content: start;
+    gap: 0.125rem 0.25rem;
+    min-block-size: 0;
+    margin: 0;
+    padding: 0.5rem 0.75rem;
+    overflow-y: auto;
+    list-style: none;
+    font-variant-numeric: tabular-nums;
+}
+
+.chess-moves-n
+{
+    align-self: center;
+    padding-inline-end: 0.25rem;
+    color: var(--color-faint);
+    font-size: 0.75rem;
+    text-align: end;
+}
+
+.chess-moves-n[data-black]
+{
+    display: none;
+}
+
+.chess-san
+{
+    display: flex;
+    min-block-size: 1.875rem;
+    align-items: center;
+    padding-inline: 0.5rem;
+    border-radius: var(--radius-control);
+    color: var(--color-text);
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+
+.chess-san[data-last]
+{
+    background: color-mix(in srgb, var(--accent) 18%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+.chess-figure
+{
+    display: inline-block;
+    flex: none;
+    inline-size: 1.45em;
+    block-size: 1.45em;
+    margin-block: -0.15em;
+    margin-inline-end: 0.1em;
+    background: center / contain no-repeat;
+}
+
+.chess-figure:not([data-piece])
+{
+    display: none;
 }
 
 .chess-clock

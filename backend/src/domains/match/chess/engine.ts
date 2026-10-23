@@ -28,6 +28,7 @@ export function create(white: number, clock: { base: number; increment: number }
         white,
         position: START,
         keys: [keyOf(START, legalMoves(START))],
+        notation: [],
         moved: [false, false],
         offer: null,
         offered: [-1, -1],
@@ -76,6 +77,7 @@ function moved(state: ChessState, next: ChessState, action: Extract<ChessAction,
     const check = inCheck(position);
     const mate = check && replies.length === 0;
     const events: ChessEvent[] = state.offer === 1 - seat ? [{ e: 'decline', seat }] : [];
+    const san = `${ sanOf(move, legal) }${ mate ? '#' : (check ? '+' : '') }`;
 
     events.push({
         e: 'move',
@@ -89,7 +91,7 @@ function moved(state: ChessState, next: ChessState, action: Extract<ChessAction,
         ...(move.enPassant === undefined ? {} : { enPassant: true }),
         ...(check ? { check: true } : {}),
         ...(mate ? { mate: true } : {}),
-        san: `${ sanOf(move, legal) }${ mate ? '#' : (check ? '+' : '') }`
+        san
     });
 
     const key = keyOf(position, replies);
@@ -98,6 +100,7 @@ function moved(state: ChessState, next: ChessState, action: Extract<ChessAction,
         ...next,
         position,
         keys,
+        notation: [...state.notation, san],
         moved: state.moved.map((one, at) => one || at === seat),
         offer: state.offer === 1 - seat ? null : state.offer,
         ply: state.ply + 1,
