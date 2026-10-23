@@ -1,5 +1,5 @@
 # The server listens on 127.0.0.1 only (main.ts), so a published port reaches nothing: run the
-# container on the host's network and point the host's nginx at 127.0.0.1:3200 as README.md says.
+# container on the host's network and point the host's nginx at 127.0.0.1:4900 as README.md says.
 #
 #   docker build --build-arg PUBLIC_ORIGIN=https://play.example.com -t baziche .
 #   docker run --rm --network host --env-file .env baziche node .dist-backend/db/sync-cli.js
