@@ -47,6 +47,7 @@ interface Older
 
 const RESULT_WORDS: Record<AdminPerson['games'][number]['result'], MessageKey> = {
     won: 'history.result.won',
+    drawn: 'history.result.drawn',
     lost: 'history.result.lost',
     abandoned: 'history.result.abandoned',
     void: 'history.result.void'

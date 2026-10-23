@@ -546,6 +546,7 @@ export function createAchieveService(db: DataSource)
                     peak: row.peakRating,
                     played: row.played,
                     won: row.won,
+                    drawn: row.drawn,
                     abandoned: row.abandoned,
                     streak: row.streak,
                     bestStreak: row.bestStreak,

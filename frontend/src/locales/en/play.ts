@@ -8,6 +8,7 @@ export const play = {
     'home.recent.title': 'Recent games',
     'home.recent.empty': 'Games you finish show up here, with what they did to your rating.',
     'home.recent.won': 'You won at {game}',
+    'home.recent.drawn': 'You drew a game of {game}',
     'home.recent.lost': 'You lost at {game}',
     'home.recent.abandoned': 'You left a game of {game}',
     'home.recent.void': 'A game of {game} did not count',

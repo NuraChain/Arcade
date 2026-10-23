@@ -55,6 +55,7 @@ export const me = {
     'history.empty': 'Nothing finished yet.',
     'history.more': 'Show more',
     'history.result.won': 'Won',
+    'history.result.drawn': 'Draw',
     'history.result.lost': 'Lost',
     'history.result.abandoned': 'Left',
     'history.result.void': 'No contest',

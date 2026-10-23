@@ -11,6 +11,7 @@ export const play: Pick<Dictionary, keyof typeof reference> = {
     'home.recent.title': 'آخرین بازی‌هات',
     'home.recent.empty': 'هر بازی‌ای که تموم کنی این‌جا میاد، با اینکه چقدر روی ریتینگت اثر گذاشته.',
     'home.recent.won': 'توی {game} بردی',
+    'home.recent.drawn': 'توی {game} مساوی کردی',
     'home.recent.lost': 'توی {game} باختی',
     'home.recent.abandoned': 'از یه بازی {game} اومدی بیرون',
     'home.recent.void': 'یه بازی {game} حساب نشد',

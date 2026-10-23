@@ -58,6 +58,7 @@ export const me: Pick<Dictionary, keyof typeof reference> = {
     'history.empty': 'هنوز هیچ بازی‌ای تموم نشده.',
     'history.more': 'بیشتر نشون بده',
     'history.result.won': 'برد',
+    'history.result.drawn': 'مساوی',
     'history.result.lost': 'باخت',
     'history.result.abandoned': 'ترک کرد',
     'history.result.void': 'بی‌نتیجه',

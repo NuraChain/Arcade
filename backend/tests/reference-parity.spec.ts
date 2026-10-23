@@ -209,12 +209,12 @@ describe('match results: the database and the wire name the same ones', () =>
 
     it('keeps a seat the match never judged as void', () =>
     {
-        expect([...known].sort()).toEqual(['abandoned', 'lost', 'void', 'won']);
+        expect([...known].sort()).toEqual(['abandoned', 'drawn', 'lost', 'void', 'won']);
     });
 
     it('carries exactly the results the CHECK accepts, in a history row and on a seat', () =>
     {
-        const candidates = new Set([...known, 'won', 'lost', 'abandoned', 'void', 'closed', 'draw', 'left', 'resign', 'timeout', 'Void', '']);
+        const candidates = new Set([...known, 'won', 'drawn', 'lost', 'abandoned', 'void', 'closed', 'draw', 'tie', 'left', 'resign', 'timeout', 'Void', '']);
 
         for (const result of candidates)
         {
@@ -233,7 +233,7 @@ describe('match results: the database and the wire name the same ones', () =>
 
 describe('match outcomes: the judge, the database and the wire name the same ones', () =>
 {
-    const judged: Record<Plan['outcome'], true> = { abandoned: true, won: true };
+    const judged: Record<Plan['outcome'], true> = { abandoned: true, drawn: true, won: true };
     const stored: Record<MatchOutcome, true> = judged;
 
     const known = [...(getMetadataArgsStorage().checks.find((one) => one.name === 'matches_outcome_known')?.expression ?? '').matchAll(/'([a-z-]+)'/g)].map((match) => match[1]);
@@ -258,7 +258,7 @@ describe('match outcomes: the judge, the database and the wire name the same one
 
     it('carries exactly the outcomes the CHECK accepts on a finished match', () =>
     {
-        const candidates = new Set([...known, 'won', 'abandoned', 'closed', 'lost', 'void', 'draw', 'Won', '']);
+        const candidates = new Set([...known, 'won', 'drawn', 'abandoned', 'closed', 'lost', 'void', 'draw', 'tie', 'Won', '']);
 
         for (const outcome of candidates)
         {

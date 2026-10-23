@@ -28,6 +28,7 @@ import { useSession } from '../../stores/session.store.ts';
 
 const RESULT_WORDS: Readonly<Record<string, MessageKey>> = {
     won: 'history.result.won',
+    drawn: 'history.result.drawn',
     lost: 'history.result.lost',
     abandoned: 'history.result.abandoned',
     void: 'history.result.void'

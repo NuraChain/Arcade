@@ -118,6 +118,7 @@ export const playerRecord = object({
     peak: number(),
     played: number(),
     won: number(),
+    drawn: number(),
     abandoned: number(),
     streak: number(),
     bestStreak: number(),
@@ -225,7 +226,7 @@ export const matchHistoryEntry = object({
     id: string(),
     game: string(),
     finishedAt: string(),
-    result: enumOf(['won', 'lost', 'abandoned', 'void']),
+    result: enumOf(['won', 'drawn', 'lost', 'abandoned', 'void']),
     ratingBefore: number().optional(),
     ratingAfter: number().optional(),
 
@@ -1637,7 +1638,7 @@ export const matchPlayer = object({
      */
     timeouts: number().optional(),
 
-    result: enumOf(['won', 'lost', 'abandoned', 'void']).optional(),
+    result: enumOf(['won', 'drawn', 'lost', 'abandoned', 'void']).optional(),
 
     exit: enumOf(['resign', 'left', 'timeout']).optional(),
 
@@ -1860,7 +1861,7 @@ export const matchView = object({
 
     remainingMs: number({ int: true, min: 0 }).optional(),
     winner: number().optional(),
-    outcome: enumOf(['won', 'abandoned']).optional(),
+    outcome: enumOf(['won', 'drawn', 'abandoned']).optional(),
     voided: literal(true).optional(),
     startedAt: string(),
     finishedAt: string().optional()

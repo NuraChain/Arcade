@@ -3,7 +3,7 @@ import { Game } from './game.entity.ts';
 import { Table } from './table.entity.ts';
 import type { Variant } from '../domains/match/sides.ts';
 
-export type MatchOutcome = 'won' | 'abandoned';
+export type MatchOutcome = 'won' | 'drawn' | 'abandoned';
 
 /**
  * One game somebody actually played.
@@ -19,7 +19,7 @@ export type MatchOutcome = 'won' | 'abandoned';
  */
 @Check('matches_finished_has_outcome', `(finished_at is null) = (outcome is null)`)
 @Check('matches_live_has_deadline', `(finished_at is null) = (deadline_at is not null)`)
-@Check('matches_outcome_known', `outcome is null or outcome in ('won', 'abandoned')`)
+@Check('matches_outcome_known', `outcome is null or outcome in ('won', 'drawn', 'abandoned')`)
 @Check('matches_rev_matches_state', `(state ->> 'rev')::int = rev`)
 @Check('matches_rev_positive', `rev >= 0`)
 @Check('matches_seats_range', `seats between 2 and 9`)

@@ -1,6 +1,6 @@
 import { START, rateField, unitPlace } from './rating.ts';
 
-export type Result = 'won' | 'lost' | 'abandoned' | 'void';
+export type Result = 'won' | 'drawn' | 'lost' | 'abandoned' | 'void';
 
 export type Pay = 'full' | 'finish' | 'none';
 
@@ -36,7 +36,7 @@ export interface Verdict
 export interface Plan
 {
     verdicts: Verdict[];
-    outcome: 'won' | 'abandoned';
+    outcome: 'won' | 'drawn' | 'abandoned';
     winnerSeat: number | null;
 }
 
@@ -88,7 +88,7 @@ function resultOf(mine: SeatFacts, counted: readonly number[], beat: (side: numb
     return counted.every(beat) ? 'won' : 'lost';
 }
 
-const STREAK = { won: 'add', lost: 'reset', abandoned: 'reset', void: 'keep' } as const satisfies Record<Result, Verdict['streak']>;
+const STREAK = { won: 'add', drawn: 'reset', lost: 'reset', abandoned: 'reset', void: 'keep' } as const satisfies Record<Result, Verdict['streak']>;
 
 function payOf(mine: SeatFacts, result: Result, after: number, forfeited: boolean): Pay
 {
