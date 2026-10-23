@@ -1266,7 +1266,7 @@ export function createBackgammonTable(options: TableOptions): BackgammonTable
         {
             if (at.reader)
             {
-                options.sound()?.play('trump');
+                options.sound()?.play('cube');
 
                 if (beat.side === 'far')
                 {

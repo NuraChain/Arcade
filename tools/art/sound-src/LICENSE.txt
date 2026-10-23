@@ -9,6 +9,7 @@ From Kenney (kenney.nl):
 - Impact Sounds 1.0: https://kenney.nl/assets/impact-sounds
 - Interface Sounds: https://kenney.nl/assets/interface-sounds
 - Music Jingles 1.0: https://kenney.nl/assets/music-jingles
+- RPG Audio: https://kenney.nl/assets/rpg-audio
 
 From BigSoundBank (bigsoundbank.com), sounds by Joseph SARDIN:
 

@@ -22,6 +22,8 @@ const CLOCK = 'bigsoundbank-1372-tic-tac-mechanical-alarm-clock-1.ogg';
  * filter on the mix; `low` takes away what is under that many hertz; `gain` is in decibels; and `kbps` spends
  * fewer bits on a long voice than the 96 a knock needs. The levels were set by measuring each take beside the
  * chess click: a hoof as loud as the click, a step 4 dB under it on a phone's speaker, a call 6 dB under it.
+ * Kenney's card recordings open on the room's own noise, which a plain take mistakes for the sound and keeps
+ * instead of the card, so each is cut round its card: a slide 5 dB under the click, a card laid 3.5 under it.
  */
 export const SOUNDS = [
     ['common', 'win', 'jingles_PIZZI02.ogg', 0.96, { kbps: 64 }],
@@ -34,14 +36,25 @@ export const SOUNDS = [
     ['common', 'tick', CLOCK, 0.09, { cuts: [[0.542, 0.612]], tail: 0.03, gain: 4 }],
     ['common', 'tick-hi', CLOCK, 0.09, { cuts: [[3.518, 3.588]], pitch: 1.12, tail: 0.03, gain: 5 }],
     ['common', 'deny', 'impactWood_light_001.ogg', 0.22, { cuts: [[0, 0.09], [0, 0.09]], apart: 0.1, tail: 0.04, gain: 4 }],
-    ['cards', 'card-slide', 'card-slide-1.ogg', 0.4],
-    ['cards', 'card-slide', 'card-slide-5.ogg', 0.4],
-    ['cards', 'card-slide', 'card-slide-7.ogg', 0.4],
-    ['cards', 'card-place', 'card-place-1.ogg', 0.35],
-    ['cards', 'card-place', 'card-place-4.ogg', 0.35],
-    ['cards', 'card-gather', 'card-shove-2.ogg', 0.5],
-    ['cards', 'card-shuffle', 'card-shuffle.ogg', 1.2],
-    ['cards', 'card-fan', 'card-fan-1.ogg', 0.5],
+    ['cards', 'card-slide', 'card-slide-1.ogg', 0.2, { cuts: [[0.12, 0.32]], tail: 0.05, gain: -2.9 }],
+    ['cards', 'card-slide', 'card-slide-3.ogg', 0.2, { cuts: [[0.05, 0.25]], tail: 0.05, gain: -2.4 }],
+    ['cards', 'card-slide', 'card-slide-4.ogg', 0.22, { cuts: [[0.03, 0.25]], tail: 0.05 }],
+    ['cards', 'card-slide', 'card-slide-7.ogg', 0.2, { cuts: [[0.25, 0.45]], tail: 0.05, gain: 1.4 }],
+    ['cards', 'card-slide', 'card-slide-8.ogg', 0.2, { cuts: [[0.21, 0.41]], tail: 0.05, gain: -1.6 }],
+    ['cards', 'card-place', 'card-place-1.ogg', 0.2, { cuts: [[0.13, 0.33]], tail: 0.05 }],
+    ['cards', 'card-place', 'card-place-2.ogg', 0.2, { cuts: [[0.16, 0.36]], tail: 0.05, gain: 2.2 }],
+    ['cards', 'card-place', 'card-place-3.ogg', 0.2, { cuts: [[0.43, 0.63]], tail: 0.05, gain: 1.1 }],
+    ['cards', 'card-place', 'card-place-4.ogg', 0.2, { cuts: [[0.3, 0.5]], tail: 0.05, gain: 2.4 }],
+    ['cards', 'card-gather', 'card-shove-1.ogg', 0.42, { cuts: [[0.1, 0.52]], tail: 0.12, gain: 2, kbps: 64 }],
+    ['cards', 'card-gather', 'card-shove-2.ogg', 0.39, { cuts: [[0.19, 0.58]], tail: 0.12, kbps: 64 }],
+    ['cards', 'card-gather', 'card-shove-4.ogg', 0.39, { cuts: [[0.19, 0.58]], tail: 0.12, gain: 2.3, kbps: 64 }],
+    ['cards', 'card-shuffle', 'card-shuffle.ogg', 0.6, { cuts: [[0.1, 0.7]], tail: 0.08, gain: 2.1, kbps: 64 }],
+    ['cards', 'card-shuffle', 'card-shuffle.ogg', 0.66, { cuts: [[1.8, 2.46]], tail: 0.08, gain: 7, kbps: 64 }],
+    ['cards', 'card-fan', 'card-fan-1.ogg', 0.5, { cuts: [[0.13, 0.63]], tail: 0.08, gain: 5.8, kbps: 64 }],
+    ['cards', 'card-fan', 'card-fan-2.ogg', 0.32, { cuts: [[0.79, 1.11]], tail: 0.06, gain: 3.9, kbps: 64 }],
+    ['hokm', 'trump', 'card-place-1.ogg', 0.32, { cuts: [[0.145, 0.45]], tail: 0.05, layer: ['impactPunch_medium_001.ogg', -8], gain: 2.7 }],
+    ['hokm', 'trick', 'bookPlace1.ogg', 0.22, { cuts: [[0, 0.22]], tail: 0.05, pitch: 1.15, low: 150, gain: -5.9 }],
+    ['hokm', 'trick', 'bookPlace3.ogg', 0.22, { cuts: [[0, 0.22]], tail: 0.05, pitch: 1.15, low: 150, gain: -8.5 }],
     ['ludo', 'die-land', 'die-throw-1.ogg', 0.14, { cuts: [[0.15, 0.29]], tail: 0.05, gain: 1 }],
     ['ludo', 'die-land', 'die-throw-2.ogg', 0.14, { cuts: [[0.07, 0.21]], tail: 0.05, gain: 2 }],
     ['ludo', 'die-land', 'die-throw-3.ogg', 0.14, { cuts: [[0.068, 0.208]], tail: 0.05, gain: 3.5 }],

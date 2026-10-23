@@ -4863,6 +4863,24 @@ in the hand and under the press, the hold and each thing it holds, the three sen
 languages, the plate's die and its two names, and the die handed over only when the table has
 shown the turn. Each was run against the fault it is there for.
 
+**A Hokm table sounds like cards on a cloth.** Kenney's card recordings open on the room's own
+noise, and a take trimmed from its first sound kept that noise instead of the card: one card laid
+and the fan were 14 and 16 dB under the click and two of the three slides 8 and 13. Every take is cut
+round its card now, levelled by measurement: five slides 5 to 6.5 dB under the chess click, four
+cards laid 3.5 to 5 under it, three gathers, two shuffles of two riffles each (0.6 s, under the
+450 ms the deal waits after one) and two fans. Hokm has a pack of its own, `hokm`, for its two
+calls. Trump is a card slapped down over a low punch (`card-place-1` and `impactPunch_medium_001`,
+centred near 700 Hz, a decibel over the click), heard as the suit strikes the medal and nothing laid
+beside it. A trick is squared on the pile of the side that took it when its cards get there and the
+count moves, a stack of paper set down (RPG Audio's `bookPlace`, pitched up and thinned), where it
+was a tone the moment the trick was taken; a trick the other side took is heard gathered and no
+more. A kot that ends the match is called as a hand won, so the match is won once. The turn is rung
+when the table shows it coming round (`shownYours`: the plates' own `turnAt`, in the hand the table is
+showing), and as the server says it on a hidden page, which shows nothing until it is seen: rung as
+the server said it, it came while the table was still gathering up the last hand, seconds before
+the reader had a card. `hokm-cues.spec.ts` holds the order, the moment, the side, the kot and the
+turn.
+
 **A Ludo table sounds like plastic on a printed board.** A pawn's step is a
 short light drop (Kenney Interface Sounds' `drop_002` and `drop_003`, about 780 Hz), where it was a
 knock of wood at 340 Hz; a capture is a bright clack (`impactPlate_light`, cut to 0.16 s, 1.2 kHz)
@@ -5218,7 +5236,8 @@ switching tables never has to unlock audio again. The spec is
   imported through `new URL(..., import.meta.url)` so each lands hashed in `/assets/` and is cached as
   immutable. **A pack belongs to the tables that play it**: `common` (what every table and the
   toasts share: the turn, the clock's tic and tac, a refusal, nothing to move, the app's chime and
-  the end of a game), `cards` (Hokm and poker), `ludo`, `backgammon`, `poker` and `chess`, each cue in exactly one
+  the end of a game), `cards` (Hokm and poker), `hokm`, `ludo`, `backgammon`, `poker` and `chess`, each cue in
+  exactly one
   (`CUES` in `game/sound-files.ts`). A board's handle names its game (`createSound(on, game)`) and
   fetches `common` and that game's packs (`TABLE_PACKS`), each once whatever else is open, and only
   while some handle that wants it has its sound on; a clock, a chess clock and the cues store fetch
@@ -5230,7 +5249,10 @@ switching tables never has to unlock audio again. The spec is
   `king-fall`. The neutral extension is load-bearing: a download manager (IDM and its kind, common
   among Persian users) intercepts any `.mp3` a page fetches and hands the page an empty 204, which
   is how the first build of this was silent on the owner's own machine while curl got a perfect 200.
-  Trump, trick, bonus (backgammon's cube), check and promote are still synthesised. A recording that failed to
+  Backgammon's cube (`cube` and `bonus`), check and promote are still synthesised. A cue is never shared
+  between two games, because the takes a page has fetched are kept for every handle on it: a backgammon
+  table opened after a Hokm one would have offered its cube with Hokm's slap, so the cube is `cube` and
+  no longer `trump`. A recording that failed to
   load falls back to its synthesised voice or to silence and never throws, which keeps "nothing can
   404 halfway through a game" true in behaviour; every shared cue but a won hand has a voice
   (`TONES`), so a clock, a refusal and the end of a game are heard while `common` is on its way.
@@ -5295,7 +5317,8 @@ spot in the reader's own hand, measured as it leaves - and the real card on the 
 (`data-landing`) until its copy lands; a finished trick is held 900ms (450 when the next lead is
 already known), the winning card glows, and the four are gathered to the winner's plate, where the
 trick is counted when they get there and a "+1" floats off the plate; a hand ends on a "+n" banner
-or a kot; the deal throws backs from the dealer. Copies fly in the clipped `.board-flight` layer, so
+or a kot; the deal throws backs from the dealer. *A Hokm table sounds like cards on a cloth*, below,
+is what each of those is heard as. Copies fly in the clipped `.board-flight` layer, so
 nothing in flight can widen a page the matrix measures.
 
 - **The "+1" leaves the plate towards the middle of the felt** (`outside` in `game/motion.ts`: the

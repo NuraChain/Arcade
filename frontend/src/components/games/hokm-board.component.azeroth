@@ -361,6 +361,8 @@ export default component HokmBoard(props: { match: MatchView; events: EventBatch
 
     derived acting = owed && !(view !== null && view.phase !== 'tricks' && veiled);
 
+    derived shownYours = view !== null && mine !== undefined && felt.round === view.round && turnAt === mine;
+
     derived spare = veiled && owed ? game.remainingMs : undefined;
 
     derived chosen = picked !== null && myTurn && legal.has(picked) ? picked : null;
@@ -694,7 +696,6 @@ export default component HokmBoard(props: { match: MatchView; events: EventBatch
     const struck = (stage: Stage) =>
     {
         sound?.play('trump');
-        sound?.play('card-place', { gain: 0.6 });
 
         for (const one of [find('.hokm-medal'), find('.hokm-token')])
         {
@@ -1134,12 +1135,12 @@ export default component HokmBoard(props: { match: MatchView; events: EventBatch
     const take = async (seat: number, next: Told | undefined, ctx: Ctx) =>
     {
         const cards = gatherOrder(held.cards, seat);
+        const ours = withMe(sideAt(seat));
 
         lying = { cards: held.cards, took: seat };
 
-        if (withMe(sideAt(seat)))
+        if (ours)
         {
-            sound?.play('trick');
             haptic('select');
         }
 
@@ -1183,10 +1184,16 @@ export default component HokmBoard(props: { match: MatchView; events: EventBatch
         held = step(held, { e: 'trick', seat });
         shown = held;
         lying = null;
+
+        if (ours)
+        {
+            sound?.play('trick', { pan: panOf(to) });
+        }
+
         tally(ctx.stage, seat);
     };
 
-    const call = async (move: Told, ctx: Ctx) =>
+    const call = async (move: Told, ends: boolean, ctx: Ctx) =>
     {
         const ours = withMe(move.side);
         const kot = move.kot === true;
@@ -1195,9 +1202,10 @@ export default component HokmBoard(props: { match: MatchView; events: EventBatch
         shown = held;
         banner = { points: move.points ?? 0, kot, ours };
 
+        // The match's own end follows the hand that ends it, so a kot there is called as any hand is.
         if (ours)
         {
-            sound?.play(kot ? 'win' : 'hand-won');
+            sound?.play(kot && !ends ? 'win' : 'hand-won');
         }
 
         if (ours)
@@ -1845,7 +1853,7 @@ export default component HokmBoard(props: { match: MatchView; events: EventBatch
 
             if (move.e === 'hand')
             {
-                await call(move, ctx);
+                await call(move, next?.e === 'finish', ctx);
 
                 continue;
             }
@@ -2168,12 +2176,15 @@ export default component HokmBoard(props: { match: MatchView; events: EventBatch
         });
     }
 
+    // A hidden page plays nothing until it is seen, so there the turn is rung as the server says it.
     effect
     {
-        const yours = acting;
+        const told = acting;
+        const shown = acting && shownYours;
 
         untrack(() =>
         {
+            const yours = typeof document !== 'undefined' && document.visibilityState === 'hidden' ? told : shown;
             const now = hokmOf(props.match);
             const drawn = now !== null && now.phase === 'draw';
 

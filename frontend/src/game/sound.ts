@@ -14,6 +14,7 @@ export type Tone =
     | 'trump'
     | 'trick'
     | 'bonus'
+    | 'cube'
     | 'pass'
     | 'deny'
     | 'home'
@@ -93,6 +94,11 @@ const LANDING: readonly Voice[] = [
     { wave: 'sine', from: 180, to: 120, hold: 0.12, gain: 0.26, delay: 0.11 }
 ];
 
+const CALL: readonly Voice[] = [
+    { wave: 'triangle', from: 392, to: 392, hold: 0.22, gain: 0.16, delay: 0 },
+    { wave: 'triangle', from: 587, to: 587, hold: 0.22, gain: 0.12, delay: 0 }
+];
+
 const STEP: readonly Voice[] = [{ wave: 'sine', from: 760, to: 700, hold: 0.05, gain: 0.14, delay: 0 }];
 
 const KNOCK: readonly Voice[] = [
@@ -107,10 +113,8 @@ const TONES: Record<Tone, readonly Voice[]> = {
     ],
     'tick': [{ wave: 'sine', from: 1000, to: 1000, hold: 0.025, gain: 0.06, delay: 0 }],
     'tick-hi': [{ wave: 'sine', from: 1250, to: 1250, hold: 0.025, gain: 0.06, delay: 0 }],
-    'trump': [
-        { wave: 'triangle', from: 392, to: 392, hold: 0.22, gain: 0.16, delay: 0 },
-        { wave: 'triangle', from: 587, to: 587, hold: 0.22, gain: 0.12, delay: 0 }
-    ],
+    'trump': CALL,
+    'cube': CALL,
     'trick': [
         { wave: 'triangle', from: 659, to: 659, hold: 0.08, gain: 0.12, delay: 0 },
         { wave: 'triangle', from: 988, to: 988, hold: 0.14, gain: 0.12, delay: 0.07 }

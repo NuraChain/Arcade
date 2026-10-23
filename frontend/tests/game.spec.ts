@@ -667,6 +667,28 @@ describe('the sound layer', () =>
         sound.dispose();
     });
 
+    it('has a voice for every cue still synthesised and for Hokm\'s calls while their pack is on its way', async () =>
+    {
+        const fake = stub();
+        const sound = createSound(true);
+
+        await tap();
+        await flush();
+
+        const silent = (['cube', 'bonus', 'check', 'promote', ...CUES.hokm] as const).filter((cue) =>
+        {
+            const before = fake.oscillators();
+
+            sound.play(cue);
+
+            return fake.oscillators() === before;
+        });
+
+        expect(silent).toEqual([]);
+
+        sound.dispose();
+    });
+
     it('plays the recording once it has arrived', async () =>
     {
         vi.stubGlobal('fetch', () => Promise.resolve({ ok: true, arrayBuffer: () => Promise.resolve(pack({ 'card-slide': [[1, 2, 3]] })) }));
@@ -767,11 +789,13 @@ describe('the sound layer', () =>
         await tap();
         await flush();
 
+        expect(named(asked)).toEqual(['cards', 'common', 'hokm']);
+
         const poker = createSound(true, 'poker');
 
         await flush();
 
-        expect(named(asked)).toEqual(['cards', 'common', 'poker']);
+        expect(named(asked)).toEqual(['cards', 'common', 'hokm', 'poker']);
 
         const chess = createSound(false, 'chess');
 
@@ -782,7 +806,7 @@ describe('the sound layer', () =>
         chess.setEnabled(true);
         await flush();
 
-        expect(named(asked)).toEqual(['cards', 'chess', 'common', 'poker']);
+        expect(named(asked)).toEqual(['cards', 'chess', 'common', 'hokm', 'poker']);
 
         [hokm, poker, chess].forEach((one) => one.dispose());
     });

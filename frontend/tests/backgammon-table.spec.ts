@@ -591,6 +591,16 @@ describe('what happened, played on the table', () =>
         expect(host.querySelectorAll('.man[data-off]')).toHaveLength(14);
     });
 
+    it('lets a double offered by the reader be heard as the cube, never as the card Hokm names trump with', async () =>
+    {
+        table.reset(sight(felt()));
+        play([act(6, 0, [{ e: 'double', seat: 0, cube: 2 }])], sight(felt({ turn: 'far' }), 6));
+        await elapse(CUBE_MS + 400);
+
+        expect(cues).toContain('cube');
+        expect(cues).not.toContain('trump');
+    });
+
     it('hands the cube to whoever took it before a die of the same action is on the table', async () =>
     {
         const before = felt({ cube: { on: true, value: 1, owner: null } });

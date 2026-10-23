@@ -143,7 +143,7 @@ describe('what a hokm table is heard to do', () =>
         expect(told.games.filter((game) => game !== 'none')).toEqual(['hokm']);
     });
 
-    it('lets every card be heard leaving and landing, then the trick taken and gathered, each once and in that order', async () =>
+    it('lets every card be heard leaving and landing, then the trick gathered and squared on the pile of the side that took it, each once and in that order', async () =>
     {
         const { send } = await mounted(match({}));
 
@@ -152,9 +152,31 @@ describe('what a hokm table is heard to do', () =>
 
         expect([count('card-slide'), count('card-place'), count('trick'), count('card-gather')]).toEqual([4, 4, 1, 1]);
         expect(told.heard.indexOf('card-slide'), 'a card was heard landing before any had left').toBeLessThan(told.heard.indexOf('card-place'));
-        expect(told.heard.lastIndexOf('card-place'), 'the trick was taken before its last card was down').toBeLessThan(told.heard.indexOf('trick'));
-        expect(order('trick', 'card-gather'), 'the trick was gathered before it was taken').toBe(true);
+        expect(told.heard.lastIndexOf('card-place'), 'the trick was gathered before its last card was down').toBeLessThan(told.heard.indexOf('card-gather'));
+        expect(order('card-gather', 'trick'), 'the trick was squared on its pile before it was gathered').toBe(true);
         expect(told.felt).toEqual(['select']);
+    });
+
+    it('squares a trick on its pile when its cards get there, not when it is taken or while they are in the air', async () =>
+    {
+        const { send } = await mounted(match({}));
+
+        send(TRICK(2));
+
+        for (let waited = 0; waited < LONG && count('card-gather') === 0; waited += 5)
+        {
+            await elapse(5);
+        }
+
+        expect(count('trick'), 'the trick was squared on its pile before its cards left the felt').toBe(0);
+
+        await elapse(TIMING.GATHER - 10);
+
+        expect(count('trick'), 'the trick was squared on its pile while its cards were still in the air').toBe(0);
+
+        await elapse(LONG, 5);
+
+        expect(count('trick')).toBe(1);
     });
 
     it('keeps the sound of taking a trick for the side that took it', async () =>
@@ -282,6 +304,7 @@ describe('what a hokm table is heard to do', () =>
         await elapse(10);
 
         expect([count('trump'), count('card-slide')], 'the deal went on before the suit had been heard').toEqual([1, 0]);
+        expect(count('card-place'), 'the slap that names trump was heard with a second card laid beside it').toBe(0);
     });
 
     it('says no, to the ear and to the hand, when the suit a Hâkem pressed is refused', async () =>
@@ -570,6 +593,47 @@ describe('what a hokm table is heard to do', () =>
         expect(told.felt).toEqual([]);
     });
 
+    const NEXT_HAND = (taker = 1) => [
+        act(4, 3, { e: 'card', seat: 3, card: 4 }, { e: 'trick', seat: taker }, { e: 'hand', side: taker % 2, points: 1, kot: false }, { e: 'deal', hakem: 3 }),
+        act(5, 3, { e: 'trump', seat: 3, suit: 'hearts' }),
+        act(6, 3, { e: 'card', seat: 3, card: 30 })
+    ];
+
+    const NEW_HAND = { hand: [14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26], plays: [14] };
+
+    it.each([1, 0])('rings the reader in when the table shows the turn coming round, not while it still gathers up the last hand (its last trick taken by seat %i)', async (taker) =>
+    {
+        const { send } = await mounted(match({ turn: 3, lead: 0, trick: [1, 2, 3], hand: [40, 41] }));
+
+        send(NEXT_HAND(taker), NEW_HAND, {}, true);
+        await elapse(TIMING.BANNER, 5);
+
+        expect(count('turn'), 'the reader was rung in while the last hand was still on the table').toBe(0);
+
+        for (let waited = 0; waited < LONG && count('card-slide') < 14; waited += 5)
+        {
+            await elapse(5);
+        }
+
+        expect([count('trump'), count('turn')], 'the reader was rung in while the card led to them was in the air').toEqual([1, 0]);
+
+        await elapse(LONG, 5);
+
+        expect(count('turn')).toBe(1);
+        expect(told.heard.slice(-2).sort(), 'the reader was rung in somewhere but where the card led to them came down').toEqual(['card-place', 'turn']);
+    });
+
+    it('rings the reader in as the server says it on a page nobody is looking at, which shows nothing until it is seen', async () =>
+    {
+        const { send } = await mounted(match({ turn: 3, lead: 1, trick: [1, 2], hand: [40, 41] }));
+
+        vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+        send([card(4, 3, 4)], { plays: [40, 41] }, {}, true);
+        await elapse(50, 5);
+
+        expect(told.heard).toEqual(['turn']);
+    });
+
     it('counts down the reader\'s own last seconds aloud, and nobody else\'s', async () =>
     {
         const ticks = () => count('tick') + count('tick-hi');
@@ -644,6 +708,27 @@ describe('what a hokm table is heard to do', () =>
         await elapse(LONG, 5);
 
         expect([count('win'), count('hand-won')], 'the side that lost a kot heard it as a win').toEqual([0, 0]);
+    });
+
+    it('hears a kot that ends the match as a hand won, so the match is won once', async () =>
+    {
+        const ours = await mounted(match({}));
+
+        ours.send([act(4, 0, { e: 'hand', side: 0, points: 2, kot: true }, { e: 'finish', side: 0 })]);
+        await elapse(LONG, 5);
+
+        expect([count('hand-won'), count('win')], 'the match was won twice').toEqual([1, 1]);
+        expect(order('hand-won', 'win')).toBe(true);
+
+        cleanup();
+        told.heard.length = 0;
+
+        const theirs = await mounted(match({}));
+
+        theirs.send([act(4, 0, { e: 'hand', side: 1, points: 2, kot: true }, { e: 'finish', side: 1 })]);
+        await elapse(LONG, 5);
+
+        expect([count('hand-won'), count('win'), count('lose')]).toEqual([0, 0, 1]);
     });
 
     it('shuffles, then deals the first five to the Hâkem alone at four, and to both players at a table for two', async () =>

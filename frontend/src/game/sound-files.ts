@@ -4,6 +4,7 @@ import type { GameId } from '../data/games.ts';
 export const CUES = {
     common: ['turn', 'tick', 'tick-hi', 'deny', 'pass', 'chime', 'win', 'lose', 'draw', 'hand-won'],
     cards: ['card-slide', 'card-place', 'card-gather', 'card-shuffle', 'card-fan'],
+    hokm: ['trump', 'trick'],
     ludo: ['die-shake', 'die-land', 'pawn-step', 'pawn-hit', 'pawn-yard', 'six', 'home'],
     backgammon: ['cup-shake', 'dice-wood', 'checker', 'checker-hit', 'checker-bar', 'checker-off'],
     poker: ['chip-lay', 'chips-stack'],
@@ -19,7 +20,7 @@ export const SAMPLED: readonly Sampled[] = Object.values(CUES).flat();
 /** The packs a table of each game plays from; anything that is not a table plays from `common` alone. */
 export const TABLE_PACKS: Record<GameId, readonly Pack[]> = {
     ludo: ['common', 'ludo'],
-    hokm: ['common', 'cards'],
+    hokm: ['common', 'cards', 'hokm'],
     poker: ['common', 'cards', 'poker'],
     backgammon: ['common', 'backgammon'],
     chess: ['common', 'chess']
@@ -28,6 +29,7 @@ export const TABLE_PACKS: Record<GameId, readonly Pack[]> = {
 export const PACKS: Record<Pack, string> = {
     common: new URL('./sound/common.cues', import.meta.url).href,
     cards: new URL('./sound/cards.cues', import.meta.url).href,
+    hokm: new URL('./sound/hokm.cues', import.meta.url).href,
     ludo: new URL('./sound/ludo.cues', import.meta.url).href,
     backgammon: new URL('./sound/backgammon.cues', import.meta.url).href,
     poker: new URL('./sound/poker.cues', import.meta.url).href,
