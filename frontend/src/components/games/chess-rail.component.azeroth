@@ -1,9 +1,11 @@
 import ChessClock from './chess-clock.component.azeroth';
+import CoachLine from './coach-line.component.azeroth';
 import TablePlate from './table-plate.component.azeroth';
 import TurnClock from './turn-clock.component.azeroth';
 import IconButton from '../ui/icon-button.component.azeroth';
 import { useLocale } from '../../stores/locale.store.ts';
 import type { Colour } from '../../../../backend/src/domains/match/chess/board.ts';
+import type { Tip } from '../../game/helpers/tip.ts';
 import type { PlateTone } from './plate-tag.ts';
 
 export interface TrayGroup
@@ -38,6 +40,7 @@ export default component ChessRail(props: {
     remainingMs?: number;
     over: boolean;
     yours: boolean;
+    tip?: Tip | null;
 })
 {
     const locale = useLocale();
@@ -89,6 +92,7 @@ export default component ChessRail(props: {
         <Show when={ offering }>
             { () => <IconButton icon="equal" label={ locale.t('chess.offer') } variant="ghost" class="chess-offer" disabled={ props.busy } onClick={ () => props.onOffer() } /> }
         </Show>
+        <CoachLine tip={ props.tip ?? null } lamp />
         <Show when={ firstClock }>
             { () => <TurnClock remainingMs={ props.remainingMs } over={ props.over } yours={ props.yours } brief class="chess-first" /> }
         </Show>

@@ -738,3 +738,76 @@ describe('the chime when the turn comes round', () =>
         expect(told.heard).not.toContain('turn');
     });
 });
+
+describe('the rules coach at a chess table', () =>
+{
+    const lamp = (container: HTMLElement) => container.querySelector('.chess-rail[data-me] .coach-line[data-lamp]');
+
+    const checked = (mine: number | null = 0) => match({ ...fen('4k3/8/8/4r3/R7/8/8/4K3 w - - 0 1'), ply: 30 }, mine);
+
+    it('lights a lamp in the reader\'s own rail with the rule that matters now, and in no other', async () =>
+    {
+        const { container } = await live(checked());
+
+        expect(lamp(container)?.textContent).toContain('You are in check');
+        expect(container.querySelectorAll('.coach-line')).toHaveLength(1);
+    });
+
+    it('tells the reader about the first move before they have made one', async () =>
+    {
+        const { container } = await live(match({ moved: [false, false] }, 0, { remainingMs: 30_000 }));
+
+        expect(lamp(container)?.textContent).toContain('Your clock starts after your first move');
+    });
+
+    it('says what running out costs when the reader\'s own clock is under a minute, and only at a clocked table', async () =>
+    {
+        const quiet = { ...fen('4k3/8/8/8/8/8/8/R3K3 w - - 0 1'), ply: 40 };
+        const short = await live(match(quiet, 0, { remainingMs: 45_000 }));
+
+        expect(lamp(short.container)?.textContent).toContain('Under a minute left');
+        short.unmount();
+
+        const daily = await live(match({ ...quiet, clock: undefined }, 0, { remainingMs: 45_000 }));
+
+        expect(lamp(daily.container)).toBeNull();
+    });
+
+    it('says in Persian what it says', async () =>
+    {
+        useLocale().setLocale('fa');
+
+        const { container } = await live(checked());
+
+        expect(lamp(container)?.textContent).toContain('کیش شدی');
+    });
+
+    it('lights nothing for somebody watching, or when the coach is turned off', async () =>
+    {
+        const watching = await live(checked(null));
+
+        expect(watching.container.querySelector('.coach-line')).toBeNull();
+        watching.unmount();
+
+        useSettings().update({ hintRules: false });
+
+        const off = await live(checked());
+
+        expect(off.container.querySelector('.coach-line')).toBeNull();
+    });
+
+    it('waits for the other side\'s move to land before it speaks about the position it leaves', async () =>
+    {
+        const table = await live(match({ ...fen('4k3/8/8/7r/R7/8/8/4K3 b - - 0 1'), ply: 29 }, 0, { rev: 4 }));
+        const checking: Played = { e: 'move', seat: 1, from: sq('h5'), to: sq('e5'), piece: 'r', check: true, san: 'Re5+' };
+
+        table.tell(match({ ...fen('4k3/8/8/4r3/R7/8/8/4K3 w - - 1 2'), ply: 30, last: { from: sq('h5'), to: sq('e5') } }, 0, { rev: 5 }), [happened(5, 1, [checking])]);
+        await flush();
+
+        expect(lamp(table.container)).toBeNull();
+
+        await elapse(GLIDE_MOST + 60);
+
+        expect(lamp(table.container)?.textContent).toContain('You are in check');
+    });
+});

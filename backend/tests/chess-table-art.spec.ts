@@ -123,3 +123,18 @@ describe('the sides of a chess table', () =>
         expect(ruleOf('.chess-clock[data-low]')).toContain('color: var(--danger);');
     });
 });
+
+describe('the rules coach on a chess rail', () =>
+{
+    it('is the lamp every table draws, opening back along the rail and from the whole rail beside the board', () =>
+    {
+        expect(ruleOf(':is(.table-bar, .ludo-lamp, .poker-hand, .bg-rail, .chess-rail) .coach-line[data-lamp]')).toContain('inline-size: 2.75rem;');
+        expect(ruleOf('.chess-rail .coach-line[data-lamp] > span:last-child')).toContain('inset-inline: auto 0;');
+        expect(blockOf('@container stage (min-aspect-ratio: 4 / 3)', '.chess-stage')).toMatch(/\n    \.chess-rail \.coach-line\[data-lamp\]\n    \{\n        position: static;/);
+    });
+
+    it('goes while a half sheet shares the stage', () =>
+    {
+        expect(ruleOf('[data-sheet] .chess-tray,\n[data-sheet] .chess-rail .chess-first,\n[data-sheet] .chess-offer,\n[data-sheet] .chess-rail .coach-line')).toContain('display: none;');
+    });
+});

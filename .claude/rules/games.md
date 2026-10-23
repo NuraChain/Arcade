@@ -4347,6 +4347,21 @@ noise. A hidden page hears no click (a hidden tab plays only what is urgent), so
 asks `turnChime` with `when` (`table-cues.ts`) for the urgent chime from the view's own turn.
 `chess-board.spec.ts` (*the chime when the turn comes round*) holds both pages.
 
+**The rules coach is a lamp in the reader's own rail** (`coachOf` in `game/helpers/chess.ts`, the
+server's own move generator asked about the position; *Helpers at the table*). It says, in this
+order: that a side's clock waits for its first move and the thirty seconds it has (to the side that
+has not moved, and to the other while it waits); how to get out of check, and that only the king
+can when every legal move is the king's; that a pawn can promote, or take in passing, while either
+can be played; what running out costs once the reader's own clock is under a minute (`SHORT_MS`) at
+a clocked table; that castling can be played, while the game is under thirty plies old; and that
+the fifty-move draw is near, from eighty half-moves. It speaks once the table has shown the other
+side's move (the shown turn is the view's), never to somebody watching, and not while the coach is
+off. The board hands the tip to the reader's rail and `null` to the other, so the rail draws the
+lamp unconditionally. `helpers-chess.spec.ts` holds every tip and plays twenty-four games at random
+through the engine with every tip held to what the engine says of the position, and
+`chess-board.spec.ts` (*the rules coach at a chess table*) the lamp, both languages and the wait
+for the landing.
+
 **The board is turned for Black and never mirrored.** The reader's colour stands at the foot, a
 watcher sees White's, and the board is `direction: ltr` in Persian as every printed board is. The art
 (`tools/art/chess.mjs`, the board and twelve Staunton pieces of our own) carries no letters: which

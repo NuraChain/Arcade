@@ -720,7 +720,7 @@ html:has(.site-drawer[open])
     -webkit-line-clamp: unset;
 }
 
-:is(.table-bar, .ludo-lamp, .poker-hand, .bg-rail) .coach-line[data-lamp]
+:is(.table-bar, .ludo-lamp, .poker-hand, .bg-rail, .chess-rail) .coach-line[data-lamp]
 {
     position: relative;
     box-sizing: border-box;
@@ -734,7 +734,7 @@ html:has(.site-drawer[open])
     border-radius: 999px;
 }
 
-:is(.table-bar, .ludo-lamp, .poker-hand, .bg-rail) .coach-line[data-lamp] > span:last-child
+:is(.table-bar, .ludo-lamp, .poker-hand, .bg-rail, .chess-rail) .coach-line[data-lamp] > span:last-child
 {
     position: absolute;
     inset-block-end: calc(100% + 0.5rem);
@@ -747,7 +747,7 @@ html:has(.site-drawer[open])
     white-space: nowrap;
 }
 
-:is(.table-bar, .ludo-lamp, .poker-hand, .bg-rail) .coach-line[data-lamp][data-open] > span:last-child
+:is(.table-bar, .ludo-lamp, .poker-hand, .bg-rail, .chess-rail) .coach-line[data-lamp][data-open] > span:last-child
 {
     overflow: visible;
     inline-size: min(20rem, 100cqw - 2rem);
@@ -5534,6 +5534,11 @@ svg.lobby-board
     color: var(--chess-light);
 }
 
+.chess-rail .coach-line[data-lamp] > span:last-child
+{
+    inset-inline: auto 0;
+}
+
 .chess-rail .chess-first
 {
     block-size: 1.5rem;
@@ -5627,6 +5632,11 @@ svg.lobby-board
         flex: 1 1 100%;
     }
 
+    .chess-rail .coach-line[data-lamp]
+    {
+        position: static;
+    }
+
     .chess-rail .chess-clock
     {
         flex: 1 1 auto;
@@ -5670,7 +5680,8 @@ svg.lobby-board
 
 [data-sheet] .chess-tray,
 [data-sheet] .chess-rail .chess-first,
-[data-sheet] .chess-offer
+[data-sheet] .chess-offer,
+[data-sheet] .chess-rail .coach-line
 {
     display: none;
 }

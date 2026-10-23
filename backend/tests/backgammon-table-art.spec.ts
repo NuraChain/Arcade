@@ -74,7 +74,7 @@ describe('the seats of a backgammon table', () =>
 
     it('open the tip from the lamp back along the rail, and from the whole card where the seats stand beside the board', () =>
     {
-        expect(sheet.split(':is(.table-bar, .ludo-lamp, .poker-hand, .bg-rail) .coach-line[data-lamp]')).toHaveLength(4);
+        expect(sheet.split(':is(.table-bar, .ludo-lamp, .poker-hand, .bg-rail, .chess-rail) .coach-line[data-lamp]')).toHaveLength(4);
         expect(ruleOf('.bg-rail .coach-line[data-lamp] > span:last-child')).toContain('inset-inline: auto 0;');
         expect(beside).toMatch(/\n    \.bg-rail\n    \{\n        position: relative;/);
         expect(beside).toMatch(/\n    \.bg-rail \.coach-line\[data-lamp\]\n    \{\n        position: static;/);

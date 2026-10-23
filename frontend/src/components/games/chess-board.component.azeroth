@@ -7,6 +7,7 @@ import { turnChime } from './table-cues.ts';
 import Button from '../ui/button.component.azeroth';
 import { chessOf } from '../../data/match.ts';
 import { useBoard, type EventBatch } from '../../stores/match.store.ts';
+import { coachOf } from '../../game/helpers/chess.ts';
 import { useDevice } from '../../stores/device.store.ts';
 import { useSettings } from '../../stores/settings.store.ts';
 import { haptic } from '../../lib/haptics.ts';
@@ -207,6 +208,8 @@ export default component ChessBoard(props: { match: MatchView; events: EventBatc
     derived shownTurn: Colour | null = live && view !== null ? (facts?.turn ?? view.turn) : null;
 
     derived inCheck = facts?.check !== null && facts?.check !== undefined;
+
+    derived tip = live && view !== null && shownTurn === view.turn ? coachOf(view, mine, clocked && myTurn ? game.remainingMs ?? null : null) : null;
 
     derived result = over && !presenting;
 
@@ -1053,6 +1056,7 @@ export default component ChessBoard(props: { match: MatchView; events: EventBatc
                                         remainingMs={ game.remainingMs }
                                         over={ over }
                                         yours={ seat === mine }
+                                        tip={ seat === mine ? tip : null }
                                     />
                                 </div>
                             </For>
