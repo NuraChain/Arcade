@@ -24,7 +24,7 @@ database says so in its log.
    The server refuses to start with a `SESSION_SECRET` shorter than 32 characters, or a
    `PUBLIC_ORIGIN` that carries a path or an ending slash, or is plain http anywhere but this
    machine, and says which. The optional features (push notifications, STUN and TURN for voice,
-   the chain, the admin) stay off until their lines are filled in. It listens on `127.0.0.1:3200`
+   the chain, the admin) stay off until their lines are filled in. It listens on `127.0.0.1:4900`
    for the proxy; write `PORT` to choose another port. Nothing else needs writing: the server
    runs as production whenever it is not started by `npm run dev`.
 3. `npm run build`
@@ -34,7 +34,7 @@ database says so in its log.
    anything, take a dump first (below).
 5. `npm start` runs the server; keep it running with whatever supervises processes on the
    machine. The logs are in `.logs/`.
-6. Point the proxy at `http://127.0.0.1:3200` (or the `PORT` you wrote), upgrading the WebSocket
+6. Point the proxy at `http://127.0.0.1:4900` (or the `PORT` you wrote), upgrading the WebSocket
    on `/ws`:
 
    ```nginx
@@ -44,7 +44,7 @@ database says so in its log.
        server_name play.example.com;
 
        location / {
-           proxy_pass http://127.0.0.1:3200;
+           proxy_pass http://127.0.0.1:4900;
            proxy_http_version 1.1;
            proxy_set_header Host $host;
            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;

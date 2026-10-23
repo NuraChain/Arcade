@@ -1371,7 +1371,7 @@ lifetimes; do not derive one from the other.
 isSameOrigin(origin, request.headers.host) || origin === config.origin
 ```
 
-`config.origin` alone refuses every socket in the mandatory QA run: the browser is on `:3200`
+`config.origin` alone refuses every socket in the mandatory QA run: the browser is on `:4900`
 against the built server while `PUBLIC_ORIGIN` is `:3100`, and a refused handshake writes exactly
 one console error that `tools/qa` cannot suppress — 600 failing cells. `isSameOrigin` is
 reimplemented in `http/origin.ts` because `@azerothjs/ws` does not export its own copy; that is

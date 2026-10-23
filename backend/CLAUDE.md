@@ -115,7 +115,7 @@ mocks that module globally with `tests/fake-api.ts`, an in-memory server that re
 and can be told to refuse; specs that assert on those calls import `server` from it. The fake
 derives handles with the REAL `handleFromName`, imported from the server, so the two cannot drift.
 
-Ports: server **3200**, vite **3100**. 3000/3001 belong to Explorer. In development the two halves
+Ports: server **4900**, vite **3100**. 3000/3001 belong to Explorer. In development the two halves
 are two processes and `frontend/vite.config.ts` proxies `/api`, `/ws` and `/avatars`; in
 production one process answers everything, so there is no CORS between halves in either mode.
 
