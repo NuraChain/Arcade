@@ -7,6 +7,20 @@ import { defineConfig } from 'vitest/config';
 
 process.env.VITE_USER_NODE_ENV ??= '';
 
+const ROOT = fileURLToPath(new URL('..', import.meta.url));
+
+const apiPort = (mode: string) =>
+{
+    const port = loadEnv(mode, ROOT, '').PORT ?? '';
+
+    if (!/^\d+$/.test(port))
+    {
+        throw new Error('PORT is required and missing: the dev server proxies to the api on it. Set it in the root .env: .env.example says what it is.');
+    }
+
+    return port;
+};
+
 const shareOrigin = (): Plugin =>
 {
     let origin = '';
@@ -15,7 +29,7 @@ const shareOrigin = (): Plugin =>
         name: 'nura-share-origin',
         configResolved: (config) =>
         {
-            origin = String(loadEnv(config.mode, fileURLToPath(new URL('..', import.meta.url)), '').PUBLIC_ORIGIN ?? '').replace(/\/+$/, '');
+            origin = String(loadEnv(config.mode, ROOT, '').PUBLIC_ORIGIN ?? '').replace(/\/+$/, '');
         },
         transformIndexHtml: (html) =>
             origin === '' ? html : html.replaceAll('content="/share.jpg"', `content="${ origin }/share.jpg"`)
@@ -47,8 +61,10 @@ const chunkModules = (): Plugin =>
     };
 };
 
-export default defineConfig(({ isSsrBuild }) =>
+export default defineConfig(({ command, isSsrBuild, mode }) =>
 {
+    const api = command === 'serve' && mode !== 'test' ? `127.0.0.1:${ apiPort(mode) }` : '';
+
     return {
         plugins: [azeroth(), tailwindcss(), shareOrigin(), ...(isSsrBuild === true ? [] : [chunkModules()])],
 
@@ -131,9 +147,9 @@ export default defineConfig(({ isSsrBuild }) =>
             // proxied by prefix guesswork. `ws: true` is what carries the realtime upgrade.
             proxy:
             {
-                '/api': { target: 'http://127.0.0.1:4900', changeOrigin: false },
-                '/ws': { target: 'ws://127.0.0.1:4900', ws: true },
-                '/avatars': { target: 'http://127.0.0.1:4900', changeOrigin: false }
+                '/api': { target: `http://${ api }`, changeOrigin: false },
+                '/ws': { target: `ws://${ api }`, ws: true },
+                '/avatars': { target: `http://${ api }`, changeOrigin: false }
             },
             fs:
             {
