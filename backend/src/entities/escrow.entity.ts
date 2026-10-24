@@ -6,7 +6,7 @@ import type { EscrowState } from '../domains/stake/policy.ts';
 
 @Check('escrows_state_known', `state in ('locking', 'open', 'settling', 'settled', 'refunding', 'refunded', 'reclaimed', 'failed')`)
 @Check('escrows_amount_positive', `amount > 0`)
-@Check('escrows_fee_range', `fee_bps between 0 and 1000`)
+@Check('escrows_fee_range', `fee_bps between 100 and 1500`)
 @Check('escrows_winners_when_paid', `(state in ('settling', 'settled')) = (winners is not null)`)
 @Check('escrows_winners_positive', `winners is null or winners > 0`)
 @Check('escrows_open_tx_shape', `open_tx is null or open_tx ~ '^0x[0-9a-f]{64}$'`)

@@ -7,7 +7,7 @@ import { User } from './user.entity.ts';
 @Check('stake_consents_secret_shape', `secret ~ '^0x[0-9a-f]{64}$'`)
 @Check('stake_consents_address_shape', `address ~ '^0x[0-9a-f]{40}$'`)
 @Check('stake_consents_amount_positive', `amount > 0`)
-@Check('stake_consents_fee_range', `fee_bps between 0 and 1000`)
+@Check('stake_consents_fee_range', `fee_bps between 100 and 1500`)
 @Index('stake_consents_one_per_seat', ['tableId', 'userId'], { unique: true, where: 'table_id is not null' })
 @Index('stake_consents_user', ['userId'])
 @Entity('stake_consents')
