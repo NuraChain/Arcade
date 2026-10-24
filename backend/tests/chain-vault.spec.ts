@@ -7,6 +7,7 @@ import {
     keccak256,
     nonceManager,
     parseTransaction,
+    stringToHex,
     type Address,
     type Hex
 } from 'viem';
@@ -72,7 +73,7 @@ const receipt = (status: '0x0' | '0x1') => ({
     type: '0x0'
 });
 
-const vaultOn = (url: string, chainId = '31337') => createVault({ rpcUrl: url, chainId, vault: VAULT, refereeKey: REFEREE_KEY });
+const vaultOn = (url: string, chainId = '31337') => createVault({ rpcUrl: url, chainId, vault: VAULT, refereeKey: REFEREE_KEY, games: ['ludo', 'hokm'] });
 
 afterEach(() =>
 {
@@ -299,6 +300,9 @@ describe('the owner\'s view of the vault', () =>
             case 'totalBalances': return { result: encodeFunctionResult({ abi: VAULT_ABI, functionName: 'totalBalances', result: 20n }) };
             case 'totalLocked': return { result: encodeFunctionResult({ abi: VAULT_ABI, functionName: 'totalLocked', result: 30n }) };
             case 'solvent': return { result: encodeFunctionResult({ abi: VAULT_ABI, functionName: 'solvent', result: true }) };
+            case 'feeOf': return { result: encodeFunctionResult({ abi: VAULT_ABI, functionName: 'feeOf', result: called.args[0] === 'hokm' ? 700 : 400 }) };
+            case 'gameFee': return { result: encodeFunctionResult({ abi: VAULT_ABI, functionName: 'gameFee', result: called.args[0] === keccak256(stringToHex('hokm')) ? 700 : 0 }) };
+            case 'referee': return { result: encodeFunctionResult({ abi: VAULT_ABI, functionName: 'referee', result: REFEREE }) };
             case 'hasRole':
             {
                 const [role, holder] = called.args;
@@ -326,7 +330,7 @@ describe('the owner\'s view of the vault', () =>
         const vault = vaultOn(url);
 
         await expect(vault.ledger(OWNER)).resolves.toEqual({
-            terms: { fee: 400, maxStake: 9n, reclaimAfter: 259_200n, paused: true },
+            terms: { fee: 400, maxStake: 9n, reclaimAfter: 259_200n, paused: true, games: { ludo: 400, hokm: 700 } },
             fees: 7n,
             free: 20n,
             locked: 30n,
@@ -335,13 +339,15 @@ describe('the owner\'s view of the vault', () =>
             gas: 50n,
             gasPrice: 1_000_000_000n,
             refereeAllowed: true,
+            chainReferee: REFEREE,
+            ownFees: { ludo: 0, hokm: 700 },
             adminAllowed: true,
             pauserAllowed: false
         });
 
         const before = asked.length;
 
-        await expect(vault.terms()).resolves.toEqual({ fee: 400, maxStake: 9n, reclaimAfter: 259_200n, paused: true });
+        await expect(vault.terms()).resolves.toEqual({ fee: 400, maxStake: 9n, reclaimAfter: 259_200n, paused: true, games: { ludo: 400, hokm: 700 } });
         expect(asked.length, 'the terms it had just read were asked for again').toBe(before);
         await expect(vaultOn(url, '1020').ledger(OWNER)).resolves.toMatchObject({ gasPrice: NURA_GAS_FLOOR });
     });
@@ -362,12 +368,14 @@ describe('the owner\'s view of the vault', () =>
         const decoded = (asked: Asked) => (asked.ok ? decodeFunctionData({ abi: VAULT_ABI, data: asked.call.data }) : asked.refusal);
 
         expect(decoded(await vault.feeCall(OWNER, 400))).toEqual({ functionName: 'setFee', args: [400] });
+        expect(decoded(await vault.gameFeeCall(OWNER, 'hokm', 700))).toEqual({ functionName: 'setGameFee', args: ['hokm', 700] });
+        expect(decoded(await vault.refereeCall(OWNER, REFEREE))).toEqual({ functionName: 'setReferee', args: [REFEREE] });
         expect(decoded(await vault.ceilingCall(OWNER, 9n))).toEqual({ functionName: 'setMaxStake', args: [9n] });
         expect(decoded(await vault.pauseCall(OWNER, true))).toEqual({ functionName: 'pause' });
         expect(decoded(await vault.pauseCall(OWNER, false))).toEqual({ functionName: 'unpause' });
         expect(await vault.feesCall(OWNER, 2n)).toEqual({ ok: false, refusal: { error: 'InsufficientFees', player: null } });
-        expect(decodeFunctionData({ abi: VAULT_ABI, data: seen[4].data })).toEqual({ functionName: 'withdrawFees', args: [OWNER, 2n] });
-        expect(seen.map((call) => call.from?.toLowerCase())).toEqual(Array(5).fill(OWNER.toLowerCase()));
+        expect(decodeFunctionData({ abi: VAULT_ABI, data: seen[6].data })).toEqual({ functionName: 'withdrawFees', args: [OWNER, 2n] });
+        expect(seen.map((call) => call.from?.toLowerCase())).toEqual(Array(7).fill(OWNER.toLowerCase()));
         await expect(vault.feeCall(OWNER, 400)).resolves.toMatchObject({ ok: true, call: { to: VAULT, value: 0n, chainId: 31337, gasPrice: null } });
     });
 });
@@ -445,7 +453,7 @@ describe('reading the vault', () =>
 
     it('is not configured without an rpc, a vault, a chain or a referee key of the right shape', () =>
     {
-        const settings = { rpcUrl: 'http://127.0.0.1:1', chainId: '31337', vault: VAULT, refereeKey: REFEREE_KEY };
+        const settings = { rpcUrl: 'http://127.0.0.1:1', chainId: '31337', vault: VAULT, refereeKey: REFEREE_KEY, games: ['ludo'] };
 
         expect(createVault(settings).configured).toBe(true);
         expect(createVault(settings).referee).toBe(REFEREE);

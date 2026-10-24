@@ -1,7 +1,7 @@
 import { Link, createResource } from 'azerothjs';
 
 import { sideOf } from '../../../../backend/src/domains/match/sides.ts';
-import { potOf, shareOf } from '../../../../backend/src/domains/stake/policy.ts';
+import { feeFor, potOf, shareOf } from '../../../../backend/src/domains/stake/policy.ts';
 import type { TableSummary } from '../../api.ts';
 import { client } from '../../api.ts';
 import { BAR_LEFT, BAR_WIDTH, BOTTOM, FIELD_LEFT, FIELD_RIGHT, FRAME, HEIGHT, MIDDLE, SPIKES, TOP, TRAY, TRAY_LEFT, WIDTH } from '../../game/backgammon-layout.ts';
@@ -126,7 +126,7 @@ export default component LobbyPanel(props: {
 
     derived held = vaults.state();
 
-    derived vaultFee = held !== null && held.configured ? held.fee : 0;
+    derived vaultFee = held !== null && held.configured ? feeFor(held, props.table.game) : 0;
 
     derived chainId = held !== null && held.configured ? held.chainId : 0;
 

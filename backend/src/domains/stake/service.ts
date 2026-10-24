@@ -15,7 +15,7 @@ import { User } from '../../entities/user.entity.ts';
 import { cursorOf, keyOf, keysetAfter, olderThan, type Keyed } from '../../lib/keyset.ts';
 import type { VaultState } from '../../schemas.ts';
 import { gameOff, gameOn, lockTable, lockingAt, stillLocking, tableRefusal } from '../table/service.ts';
-import { CONSENT_MS, eligibilityOf, onLadder, potOf, seatsOfMask, shareOf, STAKE_LADDER, weiOf, type BreakDays, type Eligibility, type EscrowState } from './policy.ts';
+import { CONSENT_MS, eligibilityOf, feeFor, onLadder, potOf, seatsOfMask, shareOf, STAKE_LADDER, weiOf, type BreakDays, type Eligibility, type EscrowState } from './policy.ts';
 
 interface StandingRow
 {
@@ -275,7 +275,7 @@ export function createStakeService(db: DataSource, vault: Vault, hooks: StakeHoo
             throw halted();
         }
 
-        if (terms.fee !== held.fee_bps)
+        if (feeFor(terms, held.game) !== held.fee_bps)
         {
             throw unsigned();
         }
@@ -777,6 +777,7 @@ export function createStakeService(db: DataSource, vault: Vault, hooks: StakeHoo
                 vault: vault.address,
                 chainId: vault.chainId,
                 fee: terms.fee,
+                games: terms.games,
                 maxStake: terms.maxStake.toString(),
                 reclaimAfter: Number(terms.reclaimAfter),
                 paused: terms.paused,
@@ -1055,7 +1056,7 @@ export function createStakeService(db: DataSource, vault: Vault, hooks: StakeHoo
                 throw notStake();
             }
 
-            const made = composed(player, table.game, table.amount, terms.fee);
+            const made = composed(player, table.game, table.amount, feeFor(terms, table.game));
 
             await db.transaction(async (tx) =>
             {
@@ -1094,7 +1095,7 @@ export function createStakeService(db: DataSource, vault: Vault, hooks: StakeHoo
                 throw notStake();
             }
 
-            const made = composed(player, game, amount, terms.fee);
+            const made = composed(player, game, amount, feeFor(terms, game));
 
             await db.transaction(async (tx) =>
             {

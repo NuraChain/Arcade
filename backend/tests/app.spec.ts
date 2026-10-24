@@ -788,6 +788,7 @@ describe('the vault', () =>
         vault: VAULT,
         chainId: 31337,
         fee: 500,
+        games: { hokm: 700 },
         maxStake: '1000000000000000000000',
         reclaimAfter: 259200,
         paused: false,

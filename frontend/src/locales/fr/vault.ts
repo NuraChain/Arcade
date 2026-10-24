@@ -35,6 +35,7 @@ export const vault: Pick<Dictionary, keyof typeof reference> = {
     'vault.depositsShut': 'Les dépôts sont fermés pour le moment. Tu peux toujours retirer tes NURA.',
     'vault.terms.title': 'Avant de jouer pour des NURA',
     'vault.terms.lead': 'Les mises sont de vrais NURA. Le gagnant remporte le pot moins des frais de {fee}, et une équipe se le partage. Partir, abandonner ou manquer trois tours d’affilée te fait perdre ta mise. Jouer pour de l’argent n’est pas autorisé partout, et c’est à toi de vérifier ce qu’il en est là où tu es.',
+    'vault.terms.games': 'Certains jeux ont leurs propres frais : {games}.',
     'vault.terms.adult': 'J’ai 18 ans ou plus, et jouer pour de l’argent est autorisé là où je vis.',
     'vault.terms.accept': 'Accepter',
     'vault.break.title': 'Faire une pause',

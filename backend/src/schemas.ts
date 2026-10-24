@@ -435,6 +435,9 @@ export const vaultState = union([
         vault: string(),
         chainId: number(),
         fee: number(),
+
+        /** The fee each game is played at; a game named nowhere is played at `fee`. */
+        games: record(number()),
         maxStake: string(),
         reclaimAfter: number(),
         paused: boolean(),
@@ -481,6 +484,9 @@ export const adminVault = union([
         fee: number(),
         minFee: number(),
         maxFee: number(),
+
+        /** Every game with the fee it is played at, and whether that is a fee of its own. */
+        games: array(object({ game: string(), fee: number(), own: boolean() })),
         maxStake: string(),
         reclaimAfter: number(),
         paused: boolean(),
@@ -494,7 +500,10 @@ export const adminVault = union([
             gas: string(),
             games: string().optional(),
             low: boolean(),
-            allowed: boolean()
+            allowed: boolean(),
+
+            /** Who the vault names as its referee, which is this server's key only while `allowed`. */
+            named: string()
         }),
         roles: object({ admin: boolean(), pauser: boolean() }),
         playing: number(),
@@ -506,6 +515,10 @@ export const adminVault = union([
 export type AdminVault = Infer<typeof adminVault>;
 
 export const adminFeeInput = object({ bps: number({ int: true, min: 0, max: 10_000 }) });
+
+export const adminGameFeeInput = object({ game: string({ min: 1, max: 32 }), bps: number({ int: true, min: 0, max: 10_000 }) });
+
+export const adminRefereeInput = object({ address: string({ max: 64 }) });
 
 export const staffMember = object({
     handle: string(),

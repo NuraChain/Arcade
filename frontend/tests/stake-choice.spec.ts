@@ -142,6 +142,18 @@ describe('a table opened at a stake', () =>
         expect(offered(container, 'Played for')).toEqual(['Free', '1 NURA', '5 NURA']);
     });
 
+    it('takes the fee of the game being opened when it has one of its own', async () =>
+    {
+        await vaultWith({ games: { ludo: 1000, hokm: 300 } });
+        const { container } = form();
+        await settle();
+
+        await press(container, 'Seats', '2 players');
+        await press(container, 'Played for', '10 NURA');
+
+        expect(container.textContent).toContain('The pot is 20 NURA. A 2 NURA fee comes out of it and the winner takes 18 NURA.');
+    });
+
     it('says what the pot comes to and what the winner takes, alone and as a pair, and opens the table at that stake', async () =>
     {
         const { container } = form();

@@ -29,7 +29,7 @@ export function fakeVault(configured = true)
     const refunded: Hex[] = [];
     const adminCalls: { name: string; admin: Address; args: unknown[] }[] = [];
     const state = {
-        terms: { fee: 500, maxStake: 1_000n * 10n ** 18n, reclaimAfter: 259_200n, paused: false } as VaultTerms,
+        terms: { fee: 500, maxStake: 1_000n * 10n ** 18n, reclaimAfter: 259_200n, paused: false, games: {} } as VaultTerms,
         ledger: {
             fees: 0n,
             free: 0n,
@@ -39,6 +39,8 @@ export function fakeVault(configured = true)
             gas: 10n ** 18n,
             gasPrice: 1_000_000_000n,
             refereeAllowed: true,
+            chainReferee: '0x0000000000000000000000000000000000000000' as Address,
+            ownFees: {} as Record<string, number>,
             adminAllowed: true,
             pauserAllowed: true
         },
@@ -151,6 +153,8 @@ export function fakeVault(configured = true)
             return { terms: state.terms, ...state.ledger };
         },
         feeCall: async (admin, feeBps) => asked('setFee', admin, [feeBps]),
+        gameFeeCall: async (admin, game, feeBps) => asked('setGameFee', admin, [game, feeBps]),
+        refereeCall: async (admin, referee) => asked('setReferee', admin, [referee]),
         ceilingCall: async (admin, amount) => asked('setMaxStake', admin, [amount]),
         feesCall: async (admin, amount) => asked('withdrawFees', admin, [admin, amount]),
         pauseCall: async (admin, paused) => asked(paused ? 'pause' : 'unpause', admin, [])

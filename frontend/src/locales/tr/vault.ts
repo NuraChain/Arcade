@@ -35,6 +35,7 @@ export const vault: Pick<Dictionary, keyof typeof reference> = {
     'vault.depositsShut': 'Yatırma şimdilik kapalı. NURA çekmeye devam edebilirsin.',
     'vault.terms.title': 'NURA ile oynamadan önce',
     'vault.terms.lead': 'Bahisler gerçek NURA. Kazanan, pottan komisyon düşüldükten sonra kalanı alır (komisyon: {fee}); takımlar bölüşür. Masadan kalkmak, pes etmek ya da üst üste üç sırayı kaçırmak bahsini kaybettirir. Parayla oynamak her yerde serbest değil; bulunduğun yerde serbest olup olmadığını kontrol etmek sana düşer.',
+    'vault.terms.games': 'Bazı oyunların kendi komisyonu var: {games}.',
     'vault.terms.adult': '18 yaşında ya da daha büyüğüm ve yaşadığım yerde parayla oynamak serbest.',
     'vault.terms.accept': 'Kabul et',
     'vault.break.title': 'Mola ver',

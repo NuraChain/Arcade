@@ -6,7 +6,7 @@ import type { Game } from '../../data/games.ts';
 import type { Person } from '../../data/person.ts';
 import { cubeLive } from '../../../../backend/src/domains/match/backgammon/cube.ts';
 import { teamsOf } from '../../../../backend/src/domains/table/teams.ts';
-import { cutOf, potOf, shareOf } from '../../../../backend/src/domains/stake/policy.ts';
+import { cutOf, feeFor, potOf, shareOf } from '../../../../backend/src/domains/stake/policy.ts';
 import { TEAMS_HINT, formatsOf, isValidTable, type Blinds, type TableConfig, type TableFormat, type TableMode, type TablePrivacy } from '../../data/tables.ts';
 import Icon from '../../icons/icon.component.azeroth';
 import { faceOf, paceOf } from '../../lib/clocks.ts';
@@ -92,7 +92,7 @@ export default component CreateGameForm(props: { game: Game; onCreated: (tableId
 
     derived staked = wager !== null;
 
-    derived fee = vault?.fee ?? 0;
+    derived fee = vault === null ? 0 : feeFor(vault, props.game.id);
 
     derived pot = potOf(BigInt(wager ?? '0'), seats);
 

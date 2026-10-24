@@ -39,6 +39,7 @@ import { copyText } from '../../lib/clipboard.ts';
 import { joinVoice } from '../../lib/join-voice.ts';
 import { BOARDS, drawable, rematchOf, stakedOf, type BoardComponent, type Rematch, type Staked } from '../../components/games/boards.ts';
 import { WATCH_DELAY_MS, turnMs } from '../../../../backend/src/domains/match/turns.ts';
+import { feeFor } from '../../../../backend/src/domains/stake/policy.ts';
 
 export default component PlayPage()
 {
@@ -664,7 +665,7 @@ export default component PlayPage()
 
     derived vaultOpen = vaultHeld !== null && vaultHeld.configured ? vaultHeld : null;
 
-    derived staked = table === null ? undefined : stakedOf(table, vaultOpen?.fee ?? 0, vaultOpen?.chainId ?? 0, vaultOpen?.balances?.free);
+    derived staked = table === null ? undefined : stakedOf(table, vaultOpen === null ? 0 : feeFor(vaultOpen, table.game), vaultOpen?.chainId ?? 0, vaultOpen?.balances?.free);
 
     derived paidSeat = seated && table?.stake !== undefined;
 

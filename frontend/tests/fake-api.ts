@@ -323,6 +323,7 @@ export const nuraState = (): VaultState => ({
     vault: NURA_VAULT,
     chainId: 31337,
     fee: 500,
+    games: {},
     maxStake: '1000000000000000000000',
     reclaimAfter: 259_200,
     paused: false,
@@ -352,6 +353,13 @@ export const adminState = (): AdminVault => ({
     fee: 500,
     minFee: 100,
     maxFee: 1500,
+    games: [
+        { game: 'hokm', fee: 700, own: true },
+        { game: 'poker', fee: 500, own: false },
+        { game: 'backgammon', fee: 500, own: false },
+        { game: 'ludo', fee: 500, own: false },
+        { game: 'chess', fee: 500, own: false }
+    ],
     maxStake: '1000000000000000000000',
     reclaimAfter: 259_200,
     paused: false,
@@ -360,7 +368,7 @@ export const adminState = (): AdminVault => ({
     locked: '30000000000000000000',
     fees: '1000000000000000000',
     solvent: true,
-    referee: { address: '0xa0Ee7A142d267C1f36714E4a8F75612F20a79720', gas: '5000000000000000000', games: '96', low: false, allowed: true },
+    referee: { address: '0xa0Ee7A142d267C1f36714E4a8F75612F20a79720', gas: '5000000000000000000', games: '96', low: false, allowed: true, named: '0xa0Ee7A142d267C1f36714E4a8F75612F20a79720' },
     roles: { admin: true, pauser: true },
     playing: 3,
     states: ESCROW_STATES.map((state) => ({ state, count: state === 'open' ? 3 : state === 'settled' ? 12 : 0 })),
@@ -1190,6 +1198,18 @@ export const client =
             server.calls.push(`admin.fee ${ input.bps }`);
             adminRefusal();
             return { ...server.nura.call, data: '0xfee' };
+        },
+        async gameFee({ input }: { input: { game: string; bps: number } })
+        {
+            server.calls.push(`admin.gameFee ${ input.game } ${ input.bps }`);
+            adminRefusal();
+            return { ...server.nura.call, data: '0xgamefee' };
+        },
+        async referee({ input }: { input: { address: string } })
+        {
+            server.calls.push(`admin.referee ${ input.address }`);
+            adminRefusal();
+            return { ...server.nura.call, data: '0xreferee' };
         },
         async ceiling({ input }: { input: { amount: string } })
         {

@@ -35,6 +35,7 @@ export const vault: Pick<Dictionary, keyof typeof reference> = {
     'vault.depositsShut': '暂时关闭存入。你仍然可以取出 NURA。',
     'vault.terms.title': '押注 NURA 之前',
     'vault.terms.lead': '押注是真实的 NURA。赢家拿走底池并扣除 {fee} 的手续费，团队则平分。离开、认输或连续错过三个回合都会输掉你的押注。并非所有地方都允许以金钱游戏，请自行确认你所在地的规定。',
+    'vault.terms.games': '部分游戏设有独立手续费：{games}。',
     'vault.terms.adult': '我已年满 18 岁，并且我所在地允许以金钱游戏。',
     'vault.terms.accept': '同意',
     'vault.break.title': '休息一下',

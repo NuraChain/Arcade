@@ -177,6 +177,7 @@ describe('the page of a player\'s NURA', () =>
         const terms = container.querySelector('section[aria-labelledby="vault-terms"]')!;
 
         expect(terms.textContent).toContain('The winner takes the pot less a 5% fee');
+        expect(terms.querySelector('[data-own-fees]'), 'every game takes the fee of the vault').toBeNull();
         expect(button(container, 'Put in'), 'NURA cannot go in before the terms are accepted').toBeUndefined();
         expect(button(container, 'Take it out to my wallet')).toBeDefined();
 
@@ -196,6 +197,16 @@ describe('the page of a player\'s NURA', () =>
         expect(container.querySelector('section[aria-labelledby="vault-terms"]')).toBeNull();
         expect(button(container, 'Put in')).toBeDefined();
         expect(button(container, 'Put it in the vault')).toBeDefined();
+    });
+
+    it('names the games that take a fee of their own beside the fee of the vault', async () =>
+    {
+        vaultWith({ may: 'paid-terms', games: { hokm: 700, ludo: 500, poker: 300 } });
+        signIn();
+
+        const container = await page();
+
+        expect(container.querySelector('[data-own-fees]')?.textContent).toBe('Some games take a fee of their own: Hokm 7% and Poker 3%.');
     });
 
     it('says why the terms could not be accepted', async () =>

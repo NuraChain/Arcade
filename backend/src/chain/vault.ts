@@ -36,6 +36,9 @@ export const VAULT_ABI = parseAbi([
     'function balanceOf(address player) view returns (uint256)',
     'function lockedOf(address player) view returns (uint256)',
     'function fee() view returns (uint16)',
+    'function feeOf(string game) view returns (uint16)',
+    'function gameFee(bytes32 gameHash) view returns (uint16)',
+    'function referee() view returns (address)',
     'function maxStake() view returns (uint256)',
     'function reclaimAfter() view returns (uint256)',
     'function paused() view returns (bool)',
@@ -46,6 +49,8 @@ export const VAULT_ABI = parseAbi([
     'function solvent() view returns (bool)',
     'function hasRole(bytes32 role, address account) view returns (bool)',
     'function setFee(uint16 newFee)',
+    'function setGameFee(string game, uint16 newFee)',
+    'function setReferee(address newReferee)',
     'function setMaxStake(uint256 newMaxStake)',
     'function withdrawFees(address to, uint256 amount)',
     'function pause()',
@@ -143,6 +148,8 @@ export type Mined = 'pending' | 'success' | 'reverted';
 export interface VaultTerms
 {
     fee: number;
+    /** The fee each game is played at, which is `fee` unless the owner gave the game one of its own. */
+    games: Record<string, number>;
     maxStake: bigint;
     reclaimAfter: bigint;
     paused: boolean;
@@ -177,6 +184,9 @@ export interface VaultLedger
     gas: bigint;
     gasPrice: bigint;
     refereeAllowed: boolean;
+    chainReferee: Address;
+    /** The fee the owner gave each game of its own, or 0 for a game played at `fee`. */
+    ownFees: Record<string, number>;
     adminAllowed: boolean;
     pauserAllowed: boolean;
 }
@@ -189,6 +199,7 @@ export interface VaultSettings
     chainId: string;
     vault: string;
     refereeKey: string;
+    games: readonly string[];
 }
 
 export interface Vault
@@ -213,6 +224,8 @@ export interface Vault
     gas(): Promise<bigint>;
     ledger(admin: Address): Promise<VaultLedger>;
     feeCall(admin: Address, feeBps: number): Promise<Asked>;
+    gameFeeCall(admin: Address, game: string, feeBps: number): Promise<Asked>;
+    refereeCall(admin: Address, referee: Address): Promise<Asked>;
     ceilingCall(admin: Address, amount: bigint): Promise<Asked>;
     feesCall(admin: Address, amount: bigint): Promise<Asked>;
     pauseCall(admin: Address, paused: boolean): Promise<Asked>;
@@ -339,6 +352,19 @@ export function createVault(settings: VaultSettings): Vault
     let held: { terms: VaultTerms; at: number } | null = null;
 
     const reader = () => boundedClient(settings.rpcUrl);
+
+    const perGame = async (read: (game: string) => Promise<number>) =>
+    {
+        const fees = await Promise.all(settings.games.map(read));
+
+        return Object.fromEntries(settings.games.map((game, index) => [game, fees[index]]));
+    };
+
+    const gameFees = (at: Address) =>
+        perGame((game) => reader().readContract({ address: at, abi: VAULT_ABI, functionName: 'feeOf', args: [game] }));
+
+    const ownFees = (at: Address) =>
+        perGame((game) => reader().readContract({ address: at, abi: VAULT_ABI, functionName: 'gameFee', args: [keccak256(stringToHex(game))] }));
 
     const ready = () =>
     {
@@ -508,14 +534,15 @@ export function createVault(settings: VaultSettings): Vault
 
             const { vault: at } = ready();
             const client = reader();
-            const [fee, maxStake, reclaimAfter, paused] = await reached(Promise.all([
+            const [fee, maxStake, reclaimAfter, paused, games] = await reached(Promise.all([
                 client.readContract({ address: at, abi: VAULT_ABI, functionName: 'fee' }),
                 client.readContract({ address: at, abi: VAULT_ABI, functionName: 'maxStake' }),
                 client.readContract({ address: at, abi: VAULT_ABI, functionName: 'reclaimAfter' }),
-                client.readContract({ address: at, abi: VAULT_ABI, functionName: 'paused' })
+                client.readContract({ address: at, abi: VAULT_ABI, functionName: 'paused' }),
+                gameFees(at)
             ]));
 
-            held = { terms: { fee, maxStake, reclaimAfter, paused }, at: Date.now() };
+            held = { terms: { fee, maxStake, reclaimAfter, paused, games }, at: Date.now() };
             return held.terms;
         },
 
@@ -581,7 +608,7 @@ export function createVault(settings: VaultSettings): Vault
             const { vault: at, account } = ready();
             const client = reader();
             const role = (id: Hex, holder: Address) => client.readContract({ address: at, abi: VAULT_ABI, functionName: 'hasRole', args: [id, holder] });
-            const [fee, maxStake, reclaimAfter, paused, fees, free, locked, solvent, holds, gas, price, refereeAllowed, adminAllowed, pauserAllowed] = await reached(Promise.all([
+            const [fee, maxStake, reclaimAfter, paused, fees, free, locked, solvent, holds, gas, price, refereeAllowed, adminAllowed, pauserAllowed, games, chainReferee, own] = await reached(Promise.all([
                 client.readContract({ address: at, abi: VAULT_ABI, functionName: 'fee' }),
                 client.readContract({ address: at, abi: VAULT_ABI, functionName: 'maxStake' }),
                 client.readContract({ address: at, abi: VAULT_ABI, functionName: 'reclaimAfter' }),
@@ -595,9 +622,12 @@ export function createVault(settings: VaultSettings): Vault
                 client.getGasPrice(),
                 role(VAULT_ROLES.referee, account.address),
                 role(VAULT_ROLES.admin, admin),
-                role(VAULT_ROLES.pauser, admin)
+                role(VAULT_ROLES.pauser, admin),
+                gameFees(at),
+                client.readContract({ address: at, abi: VAULT_ABI, functionName: 'referee' }),
+                ownFees(at)
             ]));
-            const terms = { fee, maxStake, reclaimAfter, paused };
+            const terms = { fee, maxStake, reclaimAfter, paused, games };
 
             held = { terms, at: Date.now() };
 
@@ -611,12 +641,18 @@ export function createVault(settings: VaultSettings): Vault
                 gas,
                 gasPrice: price > floor ? price : floor,
                 refereeAllowed,
+                chainReferee,
+                ownFees: own,
                 adminAllowed,
                 pauserAllowed
             };
         },
 
         feeCall: (admin, feeBps) => asked(admin, encodeFunctionData({ abi: VAULT_ABI, functionName: 'setFee', args: [feeBps] })),
+
+        gameFeeCall: (admin, game, feeBps) => asked(admin, encodeFunctionData({ abi: VAULT_ABI, functionName: 'setGameFee', args: [game, feeBps] })),
+
+        refereeCall: (admin, referee) => asked(admin, encodeFunctionData({ abi: VAULT_ABI, functionName: 'setReferee', args: [referee] })),
 
         ceilingCall: (admin, amount) => asked(admin, encodeFunctionData({ abi: VAULT_ABI, functionName: 'setMaxStake', args: [amount] })),
 

@@ -32,6 +32,7 @@ export const vault = {
     'vault.depositsShut': 'Deposits are shut for now. You can still take NURA out.',
     'vault.terms.title': 'Before you play for NURA',
     'vault.terms.lead': 'Stakes are real NURA. The winner takes the pot less a {fee} fee, and a team splits it. Leaving, giving up or missing three turns in a row loses your stake. Playing for money is not allowed everywhere, and it is yours to check where you are.',
+    'vault.terms.games': 'Some games take a fee of their own: {games}.',
     'vault.terms.adult': 'I am 18 or older, and playing for money is allowed where I live.',
     'vault.terms.accept': 'Accept',
     'vault.break.title': 'Take a break',

@@ -73,6 +73,12 @@ export function potOf(amount: bigint, seats: number)
     return amount * BigInt(seats);
 }
 
+/** The fee a stake on `game` must carry: the game's own, or the vault's. `open` refuses any other. */
+export function feeFor(terms: { fee: number; games: Record<string, number> }, game: string)
+{
+    return terms.games[game] ?? terms.fee;
+}
+
 export function cutOf(pot: bigint, feeBps: number)
 {
     return (pot * BigInt(feeBps)) / BPS;

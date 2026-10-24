@@ -11,6 +11,7 @@ import Skeleton from '../../components/ui/skeleton.component.azeroth';
 import Toggle from '../../components/ui/switch.component.azeroth';
 import VaultGames from '../../components/vault/vault-games.component.azeroth';
 import VaultMove, { type Deposits } from '../../components/vault/vault-move.component.azeroth';
+import { GAMES } from '../../data/games.ts';
 import { nuraOf } from '../../lib/nura.ts';
 import type { MessageKey } from '../../locales/en.ts';
 import { useAccount } from '../../stores/account.store.ts';
@@ -86,7 +87,13 @@ export default component WalletPage()
 
     derived moving = counted && (deposits !== 'none' || BigInt(balances?.free ?? '0') > 0n);
 
-    derived fee = locale.n((vault?.fee ?? 0) / 10_000, { style: 'percent', maximumFractionDigits: 2 });
+    const percent = (bps: number) => locale.n(bps / 10_000, { style: 'percent', maximumFractionDigits: 2 });
+
+    derived fee = percent(vault?.fee ?? 0);
+
+    derived ownFees = vault === null
+        ? ''
+        : locale.list(GAMES.filter((game) => (vault.games[game.id] ?? vault.fee) !== vault.fee).map((game) => `${ locale.t(game.nameKey) } ${ percent(vault.games[game.id]) }`));
 
     derived until = vault?.breakUntil === undefined
         ? ''
@@ -198,6 +205,9 @@ export default component WalletPage()
                     <Panel section stack="md" labelledBy="vault-terms">
                         <h2 id="vault-terms" class="text-ui-lg font-semibold text-text">{ locale.t('vault.terms.title') }</h2>
                         <p class="text-ui-base text-muted">{ locale.t('vault.terms.lead', { fee }) }</p>
+                        <Show when={ ownFees !== '' }>
+                            <p class="text-ui-base text-muted" data-own-fees>{ locale.t('vault.terms.games', { games: ownFees }) }</p>
+                        </Show>
                         <Toggle checked={ adult } label={ locale.t('vault.terms.adult') } onChange={ (on) => adult = on } />
                         <Button variant="primary" class="self-start" disabled={ !adult } loading={ accepting } onClick={ () => void accept() }>
                             { locale.t('vault.terms.accept') }

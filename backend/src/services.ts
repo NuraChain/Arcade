@@ -33,6 +33,7 @@ import { teamsOf } from './domains/table/teams.ts';
 import { createChainProfiles, recordValue } from './chain/profile.ts';
 import { createNftReader } from './chain/nfts.ts';
 import { createVault, type Vault } from './chain/vault.ts';
+import { GAME_SEEDS } from './db/seed-reference.ts';
 import { seatsOfMask } from './domains/stake/policy.ts';
 import { createStakeService, type StakeSweep } from './domains/stake/service.ts';
 import { createIdentityService } from './domains/identity/service.ts';
@@ -144,6 +145,8 @@ export interface Services extends Ports
 }
 
 const PUSH_AT_ONCE = 64;
+
+const PAID_GAMES = GAME_SEEDS.map((game) => game.id);
 
 const WATCHABLE_MAX = 48;
 
@@ -978,10 +981,11 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
         rpcUrl: config.rpcUrl,
         chainId: config.chainId,
         vault: config.vaultAddress,
-        refereeKey: config.refereeKey
+        refereeKey: config.refereeKey,
+        games: PAID_GAMES
     });
 
-    const vaultAdmin = createVaultAdmin(db, vaults);
+    const vaultAdmin = createVaultAdmin(db, vaults, PAID_GAMES);
 
     const team = createStaffService(db, config.adminWallet);
 
@@ -1670,6 +1674,20 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                 const actor = await ableTo(me, 'wallet');
 
                 return actor === null || actor.address === null ? null : await vaultAdmin.fee(actor.address, feeBps);
+            },
+
+            async gameFee(me, game, feeBps)
+            {
+                const actor = await ableTo(me, 'wallet');
+
+                return actor === null || actor.address === null ? null : await vaultAdmin.gameFee(actor.address, game, feeBps);
+            },
+
+            async referee(me, address)
+            {
+                const actor = await ableTo(me, 'wallet');
+
+                return actor === null || actor.address === null ? null : await vaultAdmin.referee(actor.address, address);
             },
 
             async ceiling(me, amount)

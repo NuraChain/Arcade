@@ -35,6 +35,7 @@ export const vault: Pick<Dictionary, keyof typeof reference> = {
     'vault.depositsShut': 'Os depósitos estão fechados por enquanto. Você ainda pode sacar NURA.',
     'vault.terms.title': 'Antes de jogar valendo NURA',
     'vault.terms.lead': 'As apostas são NURA de verdade. Quem vence leva o pote menos uma taxa de {fee}, e um time divide entre si. Sair, desistir ou perder três vezes seguidas a sua vez faz você perder a aposta. Jogar valendo dinheiro não é permitido em todo lugar, e cabe a você verificar onde você está.',
+    'vault.terms.games': 'Alguns jogos têm taxa própria: {games}.',
     'vault.terms.adult': 'Tenho 18 anos ou mais, e jogar valendo dinheiro é permitido onde eu moro.',
     'vault.terms.accept': 'Aceitar',
     'vault.break.title': 'Dar um tempo',

@@ -33,7 +33,7 @@ const unreachable = () => new HttpError(503, 'We could not reach the network. Tr
 const fakeVault = (overrides: Partial<VaultTerms> = {}, configured = true) =>
 {
     const asked: string[] = [];
-    let terms: VaultTerms = { fee: 500, maxStake: 50n * WEI_PER_NURA, reclaimAfter: 259_200n, paused: false, ...overrides };
+    let terms: VaultTerms = { fee: 500, maxStake: 50n * WEI_PER_NURA, reclaimAfter: 259_200n, paused: false, games: {}, ...overrides };
     let away = false;
 
     const vault: Vault = {
@@ -77,8 +77,10 @@ const fakeVault = (overrides: Partial<VaultTerms> = {}, configured = true) =>
         refund: async () => ({ ok: true, hash: `0x${ '00'.repeat(32) }` as Hex }),
         mined: async () => 'pending',
         gas: async () => 0n,
-        ledger: async () => ({ terms, fees: 0n, free: 0n, locked: 0n, held: 0n, solvent: true, gas: 0n, gasPrice: 0n, refereeAllowed: true, adminAllowed: false, pauserAllowed: false }),
+        ledger: async () => ({ terms, fees: 0n, free: 0n, locked: 0n, held: 0n, solvent: true, gas: 0n, gasPrice: 0n, refereeAllowed: true, chainReferee: '0x0000000000000000000000000000000000000000', ownFees: {}, adminAllowed: false, pauserAllowed: false }),
         feeCall: async () => ({ ok: false, refusal: { error: 'AccessControlUnauthorizedAccount', player: null } }),
+        gameFeeCall: async () => ({ ok: false, refusal: { error: 'AccessControlUnauthorizedAccount', player: null } }),
+        refereeCall: async () => ({ ok: false, refusal: { error: 'AccessControlUnauthorizedAccount', player: null } }),
         ceilingCall: async () => ({ ok: false, refusal: { error: 'AccessControlUnauthorizedAccount', player: null } }),
         feesCall: async () => ({ ok: false, refusal: { error: 'AccessControlUnauthorizedAccount', player: null } }),
         pauseCall: async () => ({ ok: false, refusal: { error: 'AccessControlUnauthorizedAccount', player: null } })
@@ -300,6 +302,7 @@ describe.skipIf(!active)('a player\'s NURA in the vault, against a real database
                 vault: VAULT,
                 chainId: 31337,
                 fee: 500,
+                games: {},
                 maxStake: (50n * WEI_PER_NURA).toString(),
                 reclaimAfter: 259_200,
                 paused: false,
