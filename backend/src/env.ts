@@ -129,10 +129,7 @@ export function loadServerConfig()
              */
             vapidPublicKey: optional('VAPID_PUBLIC_KEY'),
             vapidPrivateKey: optional('VAPID_PRIVATE_KEY', { secret: true }),
-            vapidSubject: optional('VAPID_SUBJECT'),
-
-            voiceTurnUrls: optional('VOICE_TURN_URLS'),
-            voiceTurnSecret: optional('VOICE_TURN_SECRET', { secret: true })
+            vapidSubject: optional('VAPID_SUBJECT')
     };
 
     const missing = unwritten(shape);

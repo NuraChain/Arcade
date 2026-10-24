@@ -2346,16 +2346,6 @@ export const pushSubscribeInput = object({
 
 export const pushEndpoint = object({ endpoint: string() });
 
-export const iceServer = object({
-    urls: array(string()),
-    username: string().optional(),
-    credential: string().optional()
-});
-
-export const voiceIce = object({ servers: array(iceServer) });
-
-export type VoiceIce = Infer<typeof voiceIce>;
-
 /* -------------------------------------------------------------------------- chat */
 
 export const messageKind = enumOf(['text', 'reaction', 'edit', 'deleted', 'system', 'invite', 'result']);

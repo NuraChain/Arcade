@@ -178,7 +178,6 @@ function side(handle: string, own: string, context?: AudioContext)
 
     const call = createVoiceCall({
         me: () => named.handle,
-        iceServers: [],
         send: (to, join, signal) => sent.push({ to, join, signal }),
         onLink: (who, link) => links.push([who, link]),
         onLevel: (who, level) => levels.push([who, level]),
@@ -858,7 +857,6 @@ function carried(options: { relay?: boolean; context?: boolean; opus?: boolean }
 
     const call = createVoiceCall({
         me: () => 'dana',
-        iceServers: [],
         send: () => undefined,
         onLink: (who, link) => links.push([who, link]),
         onLevel: () => undefined,

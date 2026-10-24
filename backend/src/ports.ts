@@ -12,7 +12,6 @@ import type {
     AdminReport,
     AdminReports,
     AdminVault,
-    VoiceIce,
     Leaderboard,
     MatchWatch,
     MatchProof,
@@ -637,11 +636,6 @@ export interface AdminPort
 }
 
 /** Every port the API declaration may reach. One member per domain. */
-export interface VoicePort
-{
-    ice(me: string): VoiceIce;
-}
-
 export interface Ports
 {
     meta: MetaPort;
@@ -658,5 +652,4 @@ export interface Ports
     chain: ChainPort;
     vault: VaultPort;
     admin: AdminPort;
-    voice: VoicePort;
 }

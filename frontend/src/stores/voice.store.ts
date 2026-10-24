@@ -1,6 +1,5 @@
 import { createSignal, createStore, untrack, type Getter } from 'azerothjs';
 
-import { client } from '../api.ts';
 import { runtime } from '../lib/runtime.ts';
 import type { GateReading } from '../services/voice.gate.ts';
 import { canDenoise, createDenoiser } from '../services/voice.denoise.ts';
@@ -761,7 +760,7 @@ export const useVoice = createStore((): VoiceApi =>
             unhold = realtime.hold();
 
             const round = ++joins;
-            const [ice, hears] = await Promise.all([client.voice.ice().catch(() => ({ servers: [] })), hearsOpus()]);
+            const hears = await hearsOpus();
 
             if (round !== joins || untrack(table) !== next)
             {
@@ -800,11 +799,6 @@ export const useVoice = createStore((): VoiceApi =>
 
             call = makeCall({
                 me,
-                iceServers: ice.servers.map((server) => ({
-                    urls: server.urls,
-                    ...(server.username === undefined ? {} : { username: server.username }),
-                    ...(server.credential === undefined ? {} : { credential: server.credential })
-                })),
                 send: (to, join, signal) => realtime.signal(next, to, join, signal.kind, signal.data),
                 relay: (to, codec, at, data) => realtime.sound(next, to, codec, at, data),
                 opus,

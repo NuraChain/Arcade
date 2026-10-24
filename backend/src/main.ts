@@ -153,14 +153,6 @@ const ports = buildPorts(dataSource, config, hub, {
 
 const serving = config.servePages;
 
-if (config.voiceTurnUrls === '')
-{
-    log.info('voice has no TURN server - a call between two networks is carried by this server', {
-        reason: 'VOICE_TURN_URLS is empty',
-        direct: 'set VOICE_TURN_URLS and VOICE_TURN_SECRET to let more players talk to each other directly'
-    });
-}
-
 const ssr = serving
     ? await import(SSR_ENTRY.href)
         .catch((error: unknown) =>

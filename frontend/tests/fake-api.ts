@@ -1830,15 +1830,6 @@ export const client =
         }
     },
 
-    voice:
-    {
-        async ice()
-        {
-            server.calls.push('voice.ice');
-            return { servers: [] };
-        }
-    },
-
     meta:
     {
         async info()

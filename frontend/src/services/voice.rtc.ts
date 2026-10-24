@@ -33,7 +33,6 @@ export interface VoiceJoin
 export interface VoiceCallDeps
 {
     me(): string;
-    iceServers: RTCIceServer[];
     send(to: string, join: string, signal: VoiceSignal): void;
     onLink(who: string, link: PeerLink | null): void;
     onLevel(who: string, level: number): void;
@@ -689,7 +688,7 @@ export function createVoiceCall(deps: VoiceCallDeps): VoiceCall
 
     const open = (join: string, who: string, opus: boolean) =>
     {
-        const connection = connect({ iceServers: deps.iceServers });
+        const connection = connect({});
 
         const peer: Peer = {
             who,

@@ -116,7 +116,6 @@ import {
     personRef,
     pushEndpoint,
     pushKey,
-    voiceIce,
     pushSubscribeInput,
     personView,
     privacy,
@@ -510,10 +509,6 @@ export function buildApi(ports: Ports)
 
             reclaim: routes.post('/reclaim', { input: reclaimInput, output: walletCall },
                 (context) => ports.vault.reclaim(context.principal.userId, context.input.id))
-        })),
-
-        voice: feature('/voice', [session], (routes) => ({
-            ice: routes.get('/ice', { output: voiceIce }, (context) => ports.voice.ice(context.principal.userId))
         })),
 
         social: feature('/social', [session], (routes) => ({

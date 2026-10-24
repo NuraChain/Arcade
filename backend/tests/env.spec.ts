@@ -6,8 +6,8 @@ import { loadServerConfig } from '../src/env.ts';
 const NAMES = [
     'NODE_ENV', 'HOST', 'PORT', 'DATABASE_URL', 'DATABASE_POOL_MAX', 'SESSION_SECRET', 'PUBLIC_ORIGIN', 'NURA_CHAIN_ID',
     'NURA_RPC_URL', 'NURA_PROFILE_ADDRESS', 'NURA_PROFILE_LENS_ADDRESS', 'NURA_EXPLORER_API', 'ADMIN_WALLET_ADDRESS',
-    'API_RATE_MAX', 'VAPID_PUBLIC_KEY', 'VAPID_PRIVATE_KEY', 'VAPID_SUBJECT', 'VOICE_TURN_URLS',
-    'VOICE_TURN_SECRET', 'NURA_VAULT_ADDRESS', 'NURA_REFEREE_KEY'
+    'API_RATE_MAX', 'VAPID_PUBLIC_KEY', 'VAPID_PRIVATE_KEY', 'VAPID_SUBJECT',
+    'NURA_VAULT_ADDRESS', 'NURA_REFEREE_KEY'
 ];
 
 const NEEDED: Record<string, string> = {
@@ -71,7 +71,7 @@ describe('the environment the server boots from', () =>
         expect(config.origin).toBe('https://play.example.com');
         expect([config.port, config.apiRateMax, config.databasePoolMax]).toEqual([4900, 600, 10]);
         expect([config.servePages, config.databaseSync]).toEqual([true, false]);
-        expect([config.vapidPublicKey, config.voiceTurnSecret, config.chainId, config.adminWallet]).toEqual(['', '', '', '']);
+        expect([config.vapidPublicKey, config.chainId, config.adminWallet]).toEqual(['', '', '']);
     });
 
     it('takes development from the command: no pages, the schema built, and a short secret allowed', () =>
@@ -119,10 +119,10 @@ describe('the environment the server boots from', () =>
 
     it('turns an optional feature on when its keys are written, and leaves it off when they are empty', () =>
     {
-        use({ ...NEEDED, VOICE_TURN_URLS: 'turn:turn.example.com', ADMIN_WALLET_ADDRESS: '' });
+        use({ ...NEEDED, VAPID_SUBJECT: 'mailto:ops@example.com', ADMIN_WALLET_ADDRESS: '' });
         const config = loadServerConfig();
 
-        expect(config.voiceTurnUrls).toBe('turn:turn.example.com');
+        expect(config.vapidSubject).toBe('mailto:ops@example.com');
         expect(config.adminWallet).toBe('');
     });
 
