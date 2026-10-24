@@ -49,6 +49,16 @@
         line-height: 1.8;
     }
 
+    /*
+     * iOS zooms on a double tap anywhere it is not told otherwise, and WebKit reads touch-action only
+     * up to the nearest scrolling box, which here is a pane and not the document: so every element
+     * says it, a pinch still zooms, and a board's own `none` or a sheet's `pan-y` still wins.
+     */
+    :where(*)
+    {
+        touch-action: manipulation;
+    }
+
     fieldset
     {
         min-inline-size: 0;
