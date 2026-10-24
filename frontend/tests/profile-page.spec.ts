@@ -109,7 +109,7 @@ describe('my profile page', () =>
 
     const page = (): Promise<HTMLElement> => render(MePage as unknown as () => HTMLElement, '/app/me');
 
-    it('puts Settings, Edit profile, Share and Sign out in the corner in that order, and shows the level once', async () =>
+    it('puts Settings, Edit profile and Share in the corner in that order, with no Sign out, and shows the level once', async () =>
     {
         signIn();
         server.progress = { xp: 120, level: 2, into: 20, span: 150 };
@@ -122,7 +122,7 @@ describe('my profile page', () =>
         const corner = [...container.querySelectorAll('section [aria-label]')]
             .map((one) => one.getAttribute('aria-label'))
             .filter((label) => ['Settings', 'Edit profile', 'Share profile', 'Sign out'].includes(label ?? ''));
-        expect(corner).toEqual(['Settings', 'Edit profile', 'Share profile', 'Sign out']);
+        expect(corner).toEqual(['Settings', 'Edit profile', 'Share profile']);
         expect(labelled('Settings')?.getAttribute('href')).toBe('/app/me/settings');
         expect(container.textContent).toContain('Level 2');
         expect(container.querySelectorAll('[role=progressbar]')).toHaveLength(1);
@@ -254,57 +254,6 @@ describe('my profile page', () =>
 
         expect(tabs).toEqual(['Achievements', 'Games']);
         expect(container.textContent).not.toContain('Nura Profile differs');
-    });
-});
-
-describe('signing out from my profile', () =>
-{
-    const signIn = () =>
-    {
-        const account: Account = {
-            id: 'u-dana',
-            handle: 'dana.w',
-            displayName: 'Dana',
-            bio: '',
-            hue: 12,
-            isMinor: false,
-            address: '0x1111111111111111111111111111111111111111'
-        };
-        server.account = account;
-        useSession().establish(account);
-    };
-
-    const press = async (container: HTMLElement) =>
-    {
-        (container.querySelector('button[aria-label="Sign out"]') as HTMLButtonElement).click();
-        await settle();
-    };
-
-    let replace: ReturnType<typeof vi.spyOn>;
-
-    beforeEach(() =>
-    {
-        replace = vi.spyOn(window.location, 'replace').mockImplementation(() => undefined);
-    });
-
-    afterEach(() =>
-    {
-        replace.mockRestore();
-        useOverlay().reset();
-    });
-
-    it('signs a wallet account out at once and loads the sign-in page', async () =>
-    {
-        signIn();
-        const container = await render(MePage as unknown as () => HTMLElement, '/app/me');
-
-        await press(container);
-
-        expect(useOverlay().items()).toHaveLength(0);
-        expect(server.calls).toContain('auth.sign-out');
-        expect(useSession().signedIn()).toBe(false);
-        expect(replace).toHaveBeenCalledWith('/sign-in');
-        expect(container.textContent).not.toContain('No such person');
     });
 });
 

@@ -7,7 +7,6 @@ import ProfileHeader from '../../components/social/profile-header.component.azer
 import Badge from '../../components/ui/badge.component.azeroth';
 import Tabs from '../../components/ui/tabs.component.azeroth';
 import ProfileSheet from '../../components/app/profile-sheet.component.azeroth';
-import { signOut } from '../../components/app/sign-out.ts';
 import EmptyState from '../../components/ui/empty-state.component.azeroth';
 import IconButton from '../../components/ui/icon-button.component.azeroth';
 import { COPY_CHIP } from '../../components/ui/variants.ts';
@@ -56,14 +55,6 @@ export default component MePage()
     const editPicture = () =>
     {
         void overlay.open(ProfileSheet, { only: 'picture' as const }, { label: locale.t('profile.pictureTitle') }).closed.then(() => face.refetch());
-    };
-
-    state leaving = false;
-
-    const leave = async () =>
-    {
-        leaving = true;
-        leaving = await signOut();
     };
 
     const copyAddress = async () =>
@@ -126,11 +117,7 @@ export default component MePage()
     <Page label={ locale.t('app.nav.profile') }>
         <Show
             when={ user !== null }
-            fallback={
-                <Show when={ !leaving }>
-                    { () => <EmptyState icon="me" title={ locale.t('person.notFound') } action={ locale.t('app.nav.home') } to="/app" class="py-12" /> }
-                </Show>
-            }
+            fallback={ <EmptyState icon="me" title={ locale.t('person.notFound') } action={ locale.t('app.nav.home') } to="/app" class="py-12" /> }
         >
             { () =>
                 <div class="flex flex-col gap-6">
@@ -171,7 +158,6 @@ export default component MePage()
                                 <IconButton icon="settings" label={ locale.t('me.settings') } variant="bare" size="xs" to="/app/me/settings" />
                                 <IconButton icon="edit" label={ locale.t('me.edit') } variant="bare" size="xs" onClick={ editProfile } />
                                 <IconButton icon="share" label={ locale.t('me.share') } variant="bare" size="xs" onClick={ () => void share() } />
-                                <IconButton icon="sign-out" label={ locale.t('app.nav.signOut') } variant="bare" size="xs" flip disabled={ leaving } onClick={ () => void leave() } />
                             </span>
                         }
                     />

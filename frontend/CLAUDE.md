@@ -218,11 +218,10 @@ reader's own page and anybody else's. It is a cover band tinted by the person's 
 overlapping it, then the name, the badges, a level row (the XP bar, with the "a level unlocks
 nothing" sentence as its tooltip and in the accessibility tree) and the counts. On a phone the level
 is a row of its own and the counts are equal columns, because four counts beside a level wrapped one
-onto a second line with a stray divider. `corner` floats on the cover: `/app/me` puts four icon buttons there - Settings,
-Edit profile, Share and Sign out, in that order, so nothing wraps at 390 - and a fifth before them,
-the shield to `/admin`, for somebody whose role opens a section of it (`sectionsFor`). Sign out is the one in
-`components/app/sign-out.ts` that Settings uses too, and a guest is asked first, because nothing
-signs back into a guest seat. Top to bottom it reads the owner's order: the wallet
+onto a second line with a stray divider. `corner` floats on the cover: `/app/me` puts three icon buttons there - Settings,
+Edit profile and Share, in that order - and a fourth before them, the shield to `/admin`, for
+somebody whose role opens a section of it (`sectionsFor`). Signing out is in Settings alone
+(`components/app/sign-out.ts`): the owner took it off the profile. Top to bottom it reads the owner's order: the wallet
 chip (`eyebrow`, `/app/me` only), the @handle chip, the join date, the name, the bio - both chips
 look alike and copy on a tap, and a name that is empty is kept only as the screen reader's heading.
 Both are `COPY_CHIP` from `variants.ts`, a 24px pill. On a coarse pointer each one sits in a row of
