@@ -190,7 +190,7 @@ export const play: Pick<Dictionary, keyof typeof reference> = {
     'tables.refused.paid-early': 'مبلغ‌های اون بازی رو فقط بعد از تموم شدن مهلت صندوق می‌شه پس گرفت.',
     'tables.refused.paid-done': 'مبلغ‌های اون بازی دیگه قفل نیستن.',
     'tables.refused.vault-role': 'این کیف پول این نقش رو توی صندوق نداره.',
-    'tables.refused.vault-fee': 'کارمزد حداکثر می‌تونه ۱۰٪ باشه.',
+    'tables.refused.vault-fee': 'کارمزد باید بین ۱٪ تا ۱۵٪ باشه.',
     'tables.refused.vault-fees': 'صندوق این‌قدر کارمزد نداره.',
     'tables.refused.vault-paused': 'صندوق از قبل متوقفه.',
     'tables.refused.vault-running': 'صندوق متوقف نیست.',

@@ -79,6 +79,8 @@ export default component AdminVault()
 
     derived fee = open === null ? '' : percent(open.fee);
 
+    derived minFee = open === null ? '' : percent(open.minFee);
+
     derived maxFee = open === null ? '' : percent(open.maxFee);
 
     derived ceiling = open === null ? '' : nura(open.maxStake);
@@ -179,9 +181,9 @@ export default component AdminVault()
     {
         const bps = bpsOf(feeText);
 
-        if (bps === null || open === null || bps > open.maxFee)
+        if (bps === null || open === null || bps < open.minFee || bps > open.maxFee)
         {
-            feeTold = locale.t('admin.vault.feeBad', { max: maxFee });
+            feeTold = locale.t('admin.vault.feeBad', { min: minFee, max: maxFee });
             return;
         }
 
@@ -346,7 +348,7 @@ export default component AdminVault()
 
                 <Show when={ mayChange }>
                     <Panel pad="md" stack="md">
-                        <Field id="admin-fee" label={ locale.t('admin.vault.feeLabel') } hint={ locale.t('admin.vault.feeHint', { max: maxFee }) } error={ feeTold }>
+                        <Field id="admin-fee" label={ locale.t('admin.vault.feeLabel') } hint={ locale.t('admin.vault.feeHint', { min: minFee, max: maxFee }) } error={ feeTold }>
                             <div class="flex flex-wrap items-center gap-2">
                                 <Input
                                     id="admin-fee"

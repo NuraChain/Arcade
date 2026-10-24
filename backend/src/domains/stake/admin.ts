@@ -6,7 +6,7 @@ import type { Asked, Vault } from '../../chain/vault.ts';
 import { Escrow } from '../../entities/escrow.entity.ts';
 import type { AdminVault } from '../../schemas.ts';
 import { tableRefusal } from '../table/service.ts';
-import { ESCROW_STATES, MAX_FEE_BPS, weiOf, type EscrowState } from './policy.ts';
+import { ESCROW_STATES, MAX_FEE_BPS, MIN_FEE_BPS, weiOf, type EscrowState } from './policy.ts';
 import { notAmount, notOpen, wireCall } from './service.ts';
 
 const GAME_GAS = 1_100_000n;
@@ -34,11 +34,11 @@ interface StuckRow
     updated_at: Date;
 }
 
-const tooHigh = () => tableRefusal('vault-fee', 'A fee can be at most 10%.');
+const outOfRange = () => tableRefusal('vault-fee', 'A fee is from 1% to 15%.');
 
 const REFUSED: Partial<Record<string, () => HttpError>> = {
     AccessControlUnauthorizedAccount: () => tableRefusal('vault-role', 'This wallet does not hold that role on the vault.'),
-    FeeTooHigh: tooHigh,
+    FeeOutOfRange: outOfRange,
     InsufficientFees: () => tableRefusal('vault-fees', 'The vault does not hold that much in fees.'),
     EnforcedPause: () => tableRefusal('vault-paused', 'The vault is already paused.'),
     ExpectedPause: () => tableRefusal('vault-running', 'The vault is not paused.'),
@@ -138,6 +138,7 @@ export function createVaultAdmin(db: DataSource, vault: Vault)
                 vault: vault.address,
                 chainId: vault.chainId,
                 fee: ledger.terms.fee,
+                minFee: MIN_FEE_BPS,
                 maxFee: MAX_FEE_BPS,
                 maxStake: ledger.terms.maxStake.toString(),
                 reclaimAfter: Number(ledger.terms.reclaimAfter),
@@ -180,9 +181,9 @@ export function createVaultAdmin(db: DataSource, vault: Vault)
                 throw notOpen();
             }
 
-            if (!Number.isInteger(feeBps) || feeBps < 0 || feeBps > MAX_FEE_BPS)
+            if (!Number.isInteger(feeBps) || feeBps < MIN_FEE_BPS || feeBps > MAX_FEE_BPS)
             {
-                throw tooHigh();
+                throw outOfRange();
             }
 
             return answered(admin, await vault.feeCall(admin, feeBps));

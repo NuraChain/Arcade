@@ -249,8 +249,8 @@ whose wallet is `ADMIN_WALLET_ADDRESS`; an admin is shown the vault as their own
 read it. Every route under `/admin/vault` answers anybody whose role does not reach it as a page that
 is not there (404, "Nothing there."), and asks the chain nothing for them.
 
-**What it reads** (`GET /admin/vault`, `domains/stake/admin.ts`): the fee and its ceiling of 10%
-(`MAX_FEE_BPS`, the contract's constant), the most a seat may stake, whether the vault is paused,
+**What it reads** (`GET /admin/vault`, `domains/stake/admin.ts`): the fee and the range it may be set in,
+1% to 15% (`MIN_FEE_BPS` and `MAX_FEE_BPS`, the contract's constants), the most a seat may stake, whether the vault is paused,
 what it holds, the players' free NURA, what is in play, the fees held and whether it covers all of
 that, in one `ledger` read that also refreshes the terms every player reads; the referee's address,
 its gas, whether it still holds `REFEREE_ROLE`, and how many nine-seat games that gas pays for at

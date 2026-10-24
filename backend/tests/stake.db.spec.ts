@@ -1477,7 +1477,8 @@ describe.skipIf(!active)('a table played for NURA, against a real database', () 
             expect(standing).toMatchObject({
                 configured: true,
                 fee: 500,
-                maxFee: 1000,
+                minFee: 100,
+                maxFee: 1500,
                 maxStake: (1_000n * WEI_PER_NURA).toString(),
                 paused: false,
                 held: '57',
@@ -1529,14 +1530,15 @@ describe.skipIf(!active)('a table played for NURA, against a real database', () 
                 { name: 'pause', admin: address, args: [] }
             ]);
 
-            expect(await word(ports.admin.fee(owner.id, 1001)), 'a fee past the vault\'s own ceiling').toBe('422 vault-fee');
+            expect(await word(ports.admin.fee(owner.id, 1501)), 'a fee past the vault\'s own ceiling').toBe('422 vault-fee');
+            expect(await word(ports.admin.fee(owner.id, 99)), 'a fee under the vault\'s own floor').toBe('422 vault-fee');
             expect(await word(ports.admin.ceiling(owner.id, 'ten')), 'an amount that is no amount').toBe('422 paid-amount');
             expect(await word(ports.admin.fees(owner.id, '0')), 'nothing to take').toBe('422 paid-amount');
             expect(fake.adminCalls, 'the vault was asked about a call refused here').toHaveLength(4);
 
             for (const [error, said] of [
                 ['AccessControlUnauthorizedAccount', '409 vault-role'],
-                ['FeeTooHigh', '422 vault-fee'],
+                ['FeeOutOfRange', '422 vault-fee'],
                 ['InsufficientFees', '409 vault-fees'],
                 ['EnforcedPause', '409 vault-paused'],
                 ['ExpectedPause', '409 vault-running'],

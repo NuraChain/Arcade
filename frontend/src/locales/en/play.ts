@@ -196,7 +196,7 @@ export const play = {
     'tables.refused.paid-early': 'The stakes of that game can be taken back once the vault’s wait has passed.',
     'tables.refused.paid-done': 'The stakes of that game are not locked any more.',
     'tables.refused.vault-role': 'This wallet does not hold that role on the vault.',
-    'tables.refused.vault-fee': 'A fee can be at most 10%.',
+    'tables.refused.vault-fee': 'A fee is from 1% to 15%.',
     'tables.refused.vault-fees': 'The vault does not hold that much in fees.',
     'tables.refused.vault-paused': 'The vault is already paused.',
     'tables.refused.vault-running': 'The vault is not paused.',

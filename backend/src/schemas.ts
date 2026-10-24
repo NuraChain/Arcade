@@ -479,6 +479,7 @@ export const adminVault = union([
         vault: string(),
         chainId: number(),
         fee: number(),
+        minFee: number(),
         maxFee: number(),
         maxStake: string(),
         reclaimAfter: number(),

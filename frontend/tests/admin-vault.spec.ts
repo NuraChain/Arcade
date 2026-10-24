@@ -218,14 +218,14 @@ describe('the vault, as its owner sees it', () =>
         const send = sending();
         const field = container.querySelector<HTMLInputElement>('#admin-fee')!;
 
-        for (const typed of ['11', 'four', '4.555', ''])
+        for (const typed of ['16', '0.5', 'four', '4.555', ''])
         {
             typeInto(field, typed);
             await settle();
             fire(button(container, 'Change the fee')!, 'click');
             await settle();
 
-            expect(said(container, '#admin-fee-error'), typed).toBe('Write a fee from 0 to 10%, like 4 or 2.5.');
+            expect(said(container, '#admin-fee-error'), typed).toBe('Write a fee from 1% to 15%, like 4 or 2.5.');
         }
 
         expect(send).not.toHaveBeenCalled();

@@ -68,7 +68,7 @@ export const VAULT_ABI = parseAbi([
     'error TooEarly(bytes32 id, uint256 due)',
     'error EnforcedPause()',
     'error ExpectedPause()',
-    'error FeeTooHigh(uint16 feeBps)',
+    'error FeeOutOfRange(uint16 feeBps)',
     'error InsufficientFees(uint256 available, uint256 required)',
     'error AccessControlUnauthorizedAccount(address account, bytes32 neededRole)'
 ]);
