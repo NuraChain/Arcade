@@ -65,7 +65,7 @@ const message = (bad) => ({ id: bad, kind: 'text', epoch: 0, seq: 0, iv: 'x', bo
 
 const BODIES = {
     '/auth/challenge': (bad) => [{ address: bad, device: bad.slice(0, 22) }],
-    '/auth/wallet': (bad) => [{ address: bad, nonce: bad, signature: bad, device: { id: bad, exchangeKey: bad, signingKey: bad, label: 'x' } }],
+    '/auth/wallet': (bad) => [{ address: bad, nonce: bad, signature: bad, ref: bad.slice(0, 40), device: { id: bad, exchangeKey: bad, signingKey: bad, label: 'x' } }],
     '/auth/handle': (bad) => [{ handle: bad.slice(0, 32) }],
     '/auth/profile': (bad) => [{ displayName: bad.slice(0, 40), bio: bad.slice(0, 240) }],
     '/auth/avatar': (bad) => [{ data: bad }],

@@ -209,7 +209,7 @@ export function createIdentityService(db: DataSource, config: IdentityConfig)
             signature: string;
             providerRdns?: string;
             userAgent: string;
-        }): Promise<SignedIn & { proof: WalletProof }>
+        }): Promise<SignedIn & { proof: WalletProof; created: boolean }>
         {
             const address = normalizeAddress(input.address);
             if (!isAddress(address))
@@ -260,6 +260,7 @@ export function createIdentityService(db: DataSource, config: IdentityConfig)
             );
 
             let user = rowsOf<UserRow>(existing)[0];
+            const created = user === undefined;
             if (user === undefined)
             {
                 const hue = Number.parseInt(address.slice(2, 8), 16) % 360;
@@ -294,7 +295,8 @@ export function createIdentityService(db: DataSource, config: IdentityConfig)
             return {
                 token,
                 principal: principalOf(user, sessionId),
-                proof: { attested: verdict.attestation, address, message: challenge.message, signature: input.signature }
+                proof: { attested: verdict.attestation, address, message: challenge.message, signature: input.signature },
+                created
             };
         },
 

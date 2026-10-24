@@ -37,6 +37,7 @@ import { GAME_SEEDS } from './db/seed-reference.ts';
 import { seatsOfMask } from './domains/stake/policy.ts';
 import { createStakeService, type StakeSweep } from './domains/stake/service.ts';
 import { createIdentityService } from './domains/identity/service.ts';
+import { createInviteService } from './domains/invite/service.ts';
 import { isAdminAddress } from './domains/identity/admin.ts';
 import { may, type Ability, type GrantedRole } from './domains/admin/roles.ts';
 import { createPeopleService } from './domains/admin/people.ts';
@@ -166,6 +167,8 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
     const chat = createChatService(db, social, franking);
     const group = createGroupService(db, social);
     const achieve = createAchieveService(db);
+
+    const invites = createInviteService(db);
     const table = createTableService(db, social);
     const catalogue = createCatalogueService(db);
     const notify = createNotifyService(db, social);
@@ -1593,6 +1596,11 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
             {
                 const result = await identity.signInWithWallet(input);
                 const { userId, sessionId } = result.principal;
+
+                if (result.created)
+                {
+                    await courtesy('referral', () => invites.refer(userId, input.ref));
+                }
 
                 if (input.device !== undefined && namesDevice(result.proof.message, input.device.id))
                 {

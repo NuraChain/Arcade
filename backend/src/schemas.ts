@@ -332,6 +332,9 @@ export const walletSignIn = object({
     nonce: string(),
     signature: string(),
     providerRdns: string().optional(),
+
+    /** The handle in the link somebody followed here, kept by the browser until the first sign-in. */
+    ref: string({ max: 40 }).optional(),
     device: object({
         id: string({ max: 22 }),
         exchangeKey: string({ max: 512 }),

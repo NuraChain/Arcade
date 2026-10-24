@@ -279,6 +279,7 @@ export function buildApi(ports: Ports)
                         signature: context.input.signature,
                         providerRdns: context.input.providerRdns,
                         userAgent: context.request.headers.get('user-agent') ?? '',
+                        ref: context.input.ref,
                         device: context.input.device
                     });
 
