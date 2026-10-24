@@ -7,7 +7,7 @@ smartcontract project Arcade folder is related to this project".
 
 So a table can be played for NURA, NuraChain's own coin: everybody at it puts in the same stake,
 the winner takes the pot less a fee, and the money is held by a contract in the SmartContract
-repository's `contracts/arcade/`, beside `ArcadeAchievements`, not by this server. This file is the
+repository's `contracts/baziche/`, beside `ArcadeAchievements`, not by this server. This file is the
 design: the contract (1), the trust it asks for (2), the server (3), the browser (4), fair dice and
 cards (5), how it is proved (6) and how it reaches NuraChain (7). The decisions it rests on are
 listed last (8), each with what was not chosen.
@@ -65,7 +65,7 @@ owner makes. A game's whole money story is in the chain's log.
 **Built from what the repository already uses**: Solidity 0.8.28 for cancun, OpenZeppelin 5.6
 (`AccessControl`, `Pausable`, `ReentrancyGuard`, `EIP712`, `SignatureChecker`, so an ERC-1271
 contract wallet can sign as well as a plain one), custom errors, NatSpec, `Address.sendValue` after
-the state has been written. Deployed by the `arcade` Ignition group (`--sc arcade`) with the admin,
+the state has been written. Deployed by the `baziche` Ignition group (`--sc baziche`) with the admin,
 the referee, the fee, the ceiling and the reclaim delay as parameters.
 
 ## 2. What it asks anybody to trust
@@ -236,7 +236,7 @@ runs both, as `devices.spec.ts` does for the device id.
 Nothing here is deployed to NuraChain by this work. `npm run preflight:nurachain` measures the
 deploy's gas, the block time and the gas price, and checks that a nine-seat `open` fits under the
 request size the public RPC accepts (it once dropped bodies over about 1.2 KB). Then the owner
-deploys with `npm run deploy:nurachain:arcade` and its parameters, funds the referee, writes the two
+deploys with `npm run deploy:nurachain:baziche` and its parameters, funds the referee, writes the two
 lines into the root `.env`, and restarts the server. Before real value: an independent audit of the
 contract, the admin role behind a multisig, and a check that playing for money is allowed where the
 product is offered.
@@ -255,7 +255,7 @@ product is offered.
 | D8 | Wallet accounts only, never a minor, 18+ and the terms once, a break on request | |
 | D9 | One signature for every paid game, good for thirty minutes | One signature for several games |
 | D10 | Fair dice and cards at paid tables, checked by the contract and in the browser | Trusting the server's dice |
-| D11 | `contracts/arcade/ArcadeVault.sol`, not upgradeable, withdraw and reclaim never paused | A proxy |
+| D11 | `contracts/baziche/ArcadeVault.sol`, not upgradeable, withdraw and reclaim never paused | A proxy |
 | D12 | A hot referee key on the server, its gas paid out of the fee | Winners paying gas to claim |
 | D13 | Quick play matches the same stake only | A range |
 | D14 | Not built: cash games, tournaments, place payouts, fiat, KYC, a typed stake, deposit history (the explorer instead) | |

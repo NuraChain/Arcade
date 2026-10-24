@@ -16,7 +16,7 @@ paths:
 
 A table can be played for NURA, NuraChain's own coin: every player stakes the same amount, the
 winner takes the pot less a fee, a team of two splits it, and a game nobody won is refunded. The
-money is held by `ArcadeVault` (`contracts/arcade/ArcadeVault.sol` in the SmartContract project),
+money is held by `ArcadeVault` (`contracts/baziche/ArcadeVault.sol` in the SmartContract project),
 never by this server. The design and its decisions D1 to D15 are
 `docs/superpowers/specs/2026-10-21-paid-tables-design.md`; this file is what the code does.
 

@@ -10,7 +10,7 @@ export const VAULT_FEE = 500;
 export const VAULT_MAX_STAKE = parseEther('1000');
 export const VAULT_RECLAIM_AFTER = 3n * 24n * 3600n;
 
-export const vaultArtifact = (root = process.env.QA_CONTRACTS ?? '../SmartContract/artifacts/contracts/arcade') =>
+export const vaultArtifact = (root = process.env.QA_CONTRACTS ?? '../SmartContract/artifacts/contracts/baziche') =>
     JSON.parse(readFileSync(`${ root }/ArcadeVault.sol/ArcadeVault.json`, 'utf8'));
 
 export async function deployVault(rpc = process.env.QA_RPC ?? 'http://127.0.0.1:8645', root = undefined)
