@@ -2051,9 +2051,8 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
             ice(me)
             {
                 const list = (value: string) => value.split(',').map((one) => one.trim()).filter((one) => one !== '');
-                const stun = list(config.voiceStunUrls);
                 const turn = list(config.voiceTurnUrls);
-                const servers: VoiceIce['servers'] = stun.length === 0 ? [] : [{ urls: stun }];
+                const servers: VoiceIce['servers'] = [];
 
                 if (turn.length > 0 && config.voiceTurnSecret !== '')
                 {

@@ -51,7 +51,7 @@ for a product whose players include minors.
   on. The room lives in memory in the hub and empties itself when a socket closes; a server restart
   drops every call, and clients rejoin on reconnect.
 - A signal is relayed only between two members of the same room who pass the pair policy.
-- `GET /api/voice/ice` answers the ICE servers from configuration: `VOICE_STUN_URLS`, and TURN
+- `GET /api/voice/ice` answers the ICE servers from configuration: TURN
   through the TURN REST scheme (`VOICE_TURN_URLS` + `VOICE_TURN_SECRET` -> a username that expires
   in an hour and an HMAC credential), so a TURN secret never reaches a browser. With nothing set
   the list is empty: players on one network still connect, players behind two NATs do not, and the

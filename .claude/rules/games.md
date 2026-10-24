@@ -1515,7 +1515,7 @@ between two players once their connections reach each other - never "end-to-end"
 already verifies. The landing's "straight between players whenever it can" is still true.
 
 **ICE comes from configuration and a TURN secret never reaches a browser.** `GET /api/voice/ice`
-answers `VOICE_STUN_URLS`, and for `VOICE_TURN_URLS` a TURN REST username that expires in an hour
+answers, for `VOICE_TURN_URLS`, a TURN REST username that expires in an hour
 with its HMAC. With nothing configured the list is empty: one network connects directly, and two
 NATs are carried by this server.
 
@@ -1921,7 +1921,7 @@ page (all three call it again), and one reloads (out, and back with all three on
 runs on Firefox as well (`QA_BROWSER=firefox`): thirty-seven checks on each. **The "ICE failed"
 the owner's Firefox logged was looked for and not found again**: twenty runs of a tracing
 diagnostic with two Firefox processes and no STUN connected every time, as did four whole passes.
-What that line meant on two networks was what it said - with `VOICE_STUN_URLS` and
+What that line meant on two networks was what it said - with no STUN server and
 `VOICE_TURN_URLS` empty there was no direct path between two machines that are not on one
 network - and such a call is now carried by this server (*A call that cannot connect directly is
 carried by this server*).
@@ -2036,8 +2036,9 @@ restarts ICE the moment a connection fails, so a line that will never work reads
 instant and connecting for the next half minute, for ever - the "Connecting" that never ended.
 Connecting takes the words back, and so does the person leaving. A call this server carries counts
 as connected, so the words are now for a call nothing can carry. The server says at boot, as
-information, when it has neither a STUN nor a TURN server: a call between two networks is then
-carried by this server, and STUN would let more of them talk directly.
+information, when it has no TURN server: a call between two networks is then carried by this
+server, and TURN would let more of them talk directly. There is no STUN setting: the owner had it
+taken out of the project.
 
 **A `<Show>` with a thunk child rebuilds whenever its `when` re-evaluates, so a control inside one
 that reads a roster loses its focus.** The per-person volume slider sat in a `when` that read the

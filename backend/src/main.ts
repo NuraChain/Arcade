@@ -153,11 +153,11 @@ const ports = buildPorts(dataSource, config, hub, {
 
 const serving = config.servePages;
 
-if (config.voiceStunUrls === '' && config.voiceTurnUrls === '')
+if (config.voiceTurnUrls === '')
 {
-    log.info('voice has no STUN or TURN server - a call between two networks is carried by this server', {
-        reason: 'VOICE_STUN_URLS and VOICE_TURN_URLS are empty',
-        direct: 'set VOICE_STUN_URLS to let more players talk to each other directly'
+    log.info('voice has no TURN server - a call between two networks is carried by this server', {
+        reason: 'VOICE_TURN_URLS is empty',
+        direct: 'set VOICE_TURN_URLS and VOICE_TURN_SECRET to let more players talk to each other directly'
     });
 }
 

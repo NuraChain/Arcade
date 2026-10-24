@@ -98,7 +98,7 @@ the third so nobody re-investigates it.
   The code has a value for no name in `.env.example`: `loadServerConfig` refuses to start while any
   is missing, in either mode, and names every one (`unwritten` in `env.ts` asks for the features'
   names, since the framework reads an empty value as an absent one). The optional features (push,
-  STUN and TURN, the chain, paid tables, the admin) are off while their values are written EMPTY.
+  TURN, the chain, paid tables, the admin) are off while their values are written EMPTY.
   `PORT`, `API_RATE_MAX` and `DATABASE_POOL_MAX` are written like the rest, and vite's dev proxy
   reads `PORT` from the same file. What differs between development and production follows from
   the mode, the paths of the build follow from where the server lives, the socket limits are

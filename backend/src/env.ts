@@ -131,7 +131,6 @@ export function loadServerConfig()
             vapidPrivateKey: optional('VAPID_PRIVATE_KEY', { secret: true }),
             vapidSubject: optional('VAPID_SUBJECT'),
 
-            voiceStunUrls: optional('VOICE_STUN_URLS'),
             voiceTurnUrls: optional('VOICE_TURN_URLS'),
             voiceTurnSecret: optional('VOICE_TURN_SECRET', { secret: true })
     };

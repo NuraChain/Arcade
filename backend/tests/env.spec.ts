@@ -6,7 +6,7 @@ import { loadServerConfig } from '../src/env.ts';
 const NAMES = [
     'NODE_ENV', 'HOST', 'PORT', 'DATABASE_URL', 'DATABASE_POOL_MAX', 'SESSION_SECRET', 'PUBLIC_ORIGIN', 'NURA_CHAIN_ID',
     'NURA_RPC_URL', 'NURA_PROFILE_ADDRESS', 'NURA_PROFILE_LENS_ADDRESS', 'NURA_EXPLORER_API', 'ADMIN_WALLET_ADDRESS',
-    'API_RATE_MAX', 'VAPID_PUBLIC_KEY', 'VAPID_PRIVATE_KEY', 'VAPID_SUBJECT', 'VOICE_STUN_URLS', 'VOICE_TURN_URLS',
+    'API_RATE_MAX', 'VAPID_PUBLIC_KEY', 'VAPID_PRIVATE_KEY', 'VAPID_SUBJECT', 'VOICE_TURN_URLS',
     'VOICE_TURN_SECRET', 'NURA_VAULT_ADDRESS', 'NURA_REFEREE_KEY'
 ];
 
@@ -119,10 +119,10 @@ describe('the environment the server boots from', () =>
 
     it('turns an optional feature on when its keys are written, and leaves it off when they are empty', () =>
     {
-        use({ ...NEEDED, VOICE_STUN_URLS: 'stun:stun.example.com', ADMIN_WALLET_ADDRESS: '' });
+        use({ ...NEEDED, VOICE_TURN_URLS: 'turn:turn.example.com', ADMIN_WALLET_ADDRESS: '' });
         const config = loadServerConfig();
 
-        expect(config.voiceStunUrls).toBe('stun:stun.example.com');
+        expect(config.voiceTurnUrls).toBe('turn:turn.example.com');
         expect(config.adminWallet).toBe('');
     });
 

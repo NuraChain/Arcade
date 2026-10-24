@@ -23,7 +23,7 @@ database says so in its log.
 
    The server refuses to start with a `SESSION_SECRET` shorter than 32 characters, or a
    `PUBLIC_ORIGIN` that carries a path or an ending slash, or is plain http anywhere but this
-   machine, and says which. The optional features (push notifications, STUN and TURN for voice,
+   machine, and says which. The optional features (push notifications, TURN for voice,
    the chain, the admin) stay off while their values are empty, and a name taken out of the file
    stops the server, which names it. It listens on `HOST` (`127.0.0.1` in the example) at `PORT`
    (4900) for the proxy. The server runs as production whenever it is not started by `npm run dev`.
