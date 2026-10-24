@@ -5,7 +5,6 @@ export const wallet: Pick<Dictionary, keyof typeof reference> = {
     'wallet.title': 'Sua carteira é o seu lugar na mesa.',
     'wallet.lead': 'O Baziche roda na {chain}. Conecte uma carteira, assine uma vez e a mesa já sabe quem você é. Sem e-mail, sem senha, sem formulário de cadastro.',
     'wallet.connect': 'Conectar carteira',
-    'wallet.other': 'Usar outra carteira',
     'wallet.connecting': 'Esperando a {wallet}…',
     'wallet.signing': 'Assine a mensagem na {wallet}',
     'wallet.signingLead': 'Uma assinatura prova que a carteira é sua. É grátis e não movimenta nada.',

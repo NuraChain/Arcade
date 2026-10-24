@@ -5,7 +5,6 @@ export const wallet: Pick<Dictionary, keyof typeof reference> = {
     'wallet.title': 'کیف پولت، صندلی خودته.',
     'wallet.lead': 'بازیچه روی {chain} کار می‌کنه. کیف پولت رو وصل کن، یه بار امضا کن، میز خودش می‌شناسدت. نه ایمیل می‌خواد، نه رمز، نه فرم ثبت‌نام.',
     'wallet.connect': 'وصل کردن کیف پول',
-    'wallet.other': 'با یه کیف پول دیگه وارد شو',
     'wallet.connecting': 'منتظر {wallet}…',
     'wallet.signing': 'پیام رو توی {wallet} امضا کن',
     'wallet.signingLead': 'یه امضا نشون می‌ده کیف پول مال خودته. مجانیه و هیچی جابه‌جا نمی‌شه.',

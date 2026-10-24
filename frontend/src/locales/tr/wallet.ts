@@ -5,7 +5,6 @@ export const wallet: Pick<Dictionary, keyof typeof reference> = {
     'wallet.title': 'Cüzdanın, masadaki yerin.',
     'wallet.lead': 'Baziche şu ağda çalışır: {chain}. Bir cüzdan bağla, bir kez imzala, masa seni tanısın. E-posta yok, şifre yok, kayıt formu yok.',
     'wallet.connect': 'Cüzdan bağla',
-    'wallet.other': 'Başka bir cüzdan kullan',
     'wallet.connecting': 'Cüzdan bekleniyor: {wallet}…',
     'wallet.signing': 'Mesajı cüzdanında imzala: {wallet}',
     'wallet.signingLead': 'Tek bir imza cüzdanın sana ait olduğunu kanıtlar. Ücretsizdir ve hiçbir şey göndermez.',
