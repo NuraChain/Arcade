@@ -1,17 +1,19 @@
 import { loadConfig, num, oneOf, str, type ConfigVar } from '@azerothjs/http';
 
+/**
+ * A feature's key: the name must be written, and written empty it turns the feature off. The
+ * framework reads an empty value as an absent one, so the empty string here is what lets `NAME=`
+ * through; that the name is written at all is asked by `unwritten`.
+ */
 const optional = (name: string, options: { secret?: boolean } = {}): ConfigVar<string> =>
     ({ name, parse: (raw) => raw, defaultValue: '', ...(options.secret === true ? { secret: true } : {}) });
 
+const unwritten = (shape: Record<string, ConfigVar<unknown>>) =>
+    Object.values(shape)
+        .filter((variable) => variable.defaultValue === '' && process.env[variable.name] === undefined)
+        .map((variable) => `  - ${ variable.name } is required and missing (write it empty to leave its feature off)`);
+
 export const SECRET_LEAST = 32;
-
-export const PORT = 4900;
-
-export const API_RATE = 600;
-
-export const POOL_MAX = 10;
-
-export const DEVELOPMENT_ORIGIN = 'http://localhost:3100';
 
 const MODES = ['development', 'production', 'test'] as const;
 
@@ -52,24 +54,20 @@ export function unsafeForProduction(secret: string, origin: string)
 }
 
 /**
- * What this process is configured with: three things only the operator can know, the keys of the
- * optional features (absent or empty turns a feature off), and a few numbers with a value of their
- * own. The mode is the command's: `azeroth dev` says development, vitest says test, and anything
- * else is production. What differs between development and production follows from it.
+ * What this process is configured with: every name in `.env.example`, each written, none with a
+ * value in the code. A feature's keys may be written empty, which turns the feature off. The mode
+ * is the command's: `azeroth dev` says development, vitest says test, and anything else is
+ * production. What differs between development and production follows from it.
  */
 export function loadServerConfig()
 {
     const env = loadConfig({ env: oneOf('NODE_ENV', MODES, { default: 'production' }) }).env;
 
-    let config;
-
-    try
-    {
-        config = loadConfig({
-            port: num('PORT', { default: PORT }),
+    const shape = {
+            port: num('PORT'),
 
             databaseUrl: str('DATABASE_URL', { secret: true }),
-            databasePoolMax: num('DATABASE_POOL_MAX', { default: POOL_MAX }),
+            databasePoolMax: num('DATABASE_POOL_MAX'),
 
             /**
              * Signs session cookies and realtime tickets. `serializeCookie` has no `signed` option
@@ -83,7 +81,7 @@ export function loadServerConfig()
              * origin check and the cookie's site. It is NOT derived from a request header - a
              * header is attacker-controlled and this value decides what a signature means.
              */
-            origin: str('PUBLIC_ORIGIN', env === 'production' ? {} : { default: DEVELOPMENT_ORIGIN }),
+            origin: str('PUBLIC_ORIGIN'),
 
             /** The chain, DECIMAL EIP-155: what a wallet row records and what a contract wallet is checked on. */
             chainId: optional('NURA_CHAIN_ID'),
@@ -113,7 +111,7 @@ export function loadServerConfig()
              * the limiter is right to refuse it. A load run raises this deliberately instead of the
              * product shipping a limit shaped around a test.
              */
-            apiRateMax: num('API_RATE_MAX', { default: API_RATE }),
+            apiRateMax: num('API_RATE_MAX'),
 
             /**
              * Web Push, all three optional and all three needed together.
@@ -130,11 +128,25 @@ export function loadServerConfig()
             voiceStunUrls: optional('VOICE_STUN_URLS'),
             voiceTurnUrls: optional('VOICE_TURN_URLS'),
             voiceTurnSecret: optional('VOICE_TURN_SECRET', { secret: true })
-        });
+    };
+
+    const missing = unwritten(shape);
+    let config;
+
+    try
+    {
+        config = loadConfig(shape);
     }
     catch (error)
     {
-        throw new Error(`${ error instanceof Error ? error.message : String(error) }\nSet them in the root .env: .env.example says what each one is.`, { cause: error });
+        const said = [error instanceof Error ? error.message : String(error), ...missing].join('\n');
+
+        throw new Error(`${ said }\nSet them in the root .env: .env.example says what each one is.`, { cause: error });
+    }
+
+    if (missing.length > 0)
+    {
+        throw new Error(`Configuration is invalid:\n${ missing.join('\n') }\nSet them in the root .env: .env.example says what each one is.`);
     }
 
     if (env === 'production')

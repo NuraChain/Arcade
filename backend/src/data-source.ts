@@ -5,7 +5,6 @@ import { randomUUID } from 'node:crypto';
 
 import { DataSource } from 'typeorm';
 
-import { POOL_MAX } from './env.ts';
 import { entities } from './entities/index.ts';
 import { oneAtATime } from './lib/one-at-a-time.ts';
 
@@ -29,7 +28,7 @@ export const dataSource = new DataSource({
     synchronize: false,
 
     extra: {
-        max: Math.max(1, Number.parseInt(process.env.DATABASE_POOL_MAX ?? '', 10) || POOL_MAX),
+        max: Number(process.env.DATABASE_POOL_MAX),
         connectionTimeoutMillis: 5000,
         idleTimeoutMillis: 30_000,
         statement_timeout: 30_000
