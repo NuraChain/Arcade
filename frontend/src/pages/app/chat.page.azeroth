@@ -137,6 +137,22 @@ export default component ChatPage()
     };
 
     /** Takes the scroller as it is drawn, which on a link opened cold is after the page mounted. */
+    /**
+     * The header and the composer float over the thread as the island does, so the thread is told
+     * how tall each is (`--chat-head`, `--chat-foot` on their column) and keeps that much room at
+     * its ends: the first and the last line can always be scrolled clear of them.
+     */
+    const room = (name: string) => (element: HTMLElement) =>
+    {
+        const write = () => element.parentElement?.style.setProperty(name, `${ element.offsetHeight }px`);
+
+        write();
+        if (typeof ResizeObserver !== 'undefined')
+        {
+            new ResizeObserver(write).observe(element);
+        }
+    };
+
     const hold = (element: HTMLElement) =>
     {
         unstick?.();
@@ -858,8 +874,9 @@ export default component ChatPage()
                     }
                 >
                     { () =>
-                        <div class="flex h-full min-h-0 flex-col">
-                            <header class="safe-t z-topbar sticky top-0 flex min-h-15 items-center gap-1.5 border-b border-line bg-void/90 px-2 py-1.5 backdrop-blur-md sm:px-3">
+                        <div class="relative flex h-full min-h-0 flex-col">
+                            <div ref={ room('--chat-head') } class="safe-t pointer-events-none absolute inset-x-0 top-0 z-topbar flex flex-col gap-2 px-2 pt-2 sm:px-3" data-chat-head>
+                            <header class="pointer-events-auto flex min-h-14 items-center gap-1.5 rounded-[1.75rem] border border-line/70 bg-void/35 shadow-[var(--shadow-2)] backdrop-blur-xl backdrop-saturate-150 px-1.5 py-1">
                                 <Show when={ !split }>
                                     { () => <IconButton icon="back" label={ locale.t('app.nav.back') } flip onClick={ goBack } /> }
                                 </Show>
@@ -913,7 +930,7 @@ export default component ChatPage()
 
                             <Show when={ searching }>
                                 { () =>
-                                    <div ref={ (element) => finder = element } class="flex items-center border-b border-line bg-void/90 px-2 py-1.5 sm:px-3">
+                                    <div ref={ (element) => finder = element } class="pointer-events-auto flex items-center rounded-[1.375rem] border border-line/70 bg-void/35 shadow-[var(--shadow-2)] backdrop-blur-xl backdrop-saturate-150 px-2 py-1.5">
                                         <ThreadSearch
                                             value={ sought }
                                             said={ said }
@@ -927,10 +944,11 @@ export default component ChatPage()
                                     </div>
                                 }
                             </Show>
+                            </div>
 
                             <div class="relative flex min-h-0 flex-1 flex-col">
                                 <div ref={ hold } class={ [ CHAT_WELL, '@container/thread flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden px-3 sm:px-5' ].join(' ') }>
-                                    <div class="mt-auto flex w-full flex-col pb-3 pt-4">
+                                    <div class="mt-auto flex w-full flex-col pb-[calc(var(--chat-foot,0px)+0.75rem)] pt-[calc(var(--chat-head,0px)+1rem)]">
                                         <Show when={ !chat.hasEarlier() && stop === null && !seal.loading() && messages.length > 0 }>
                                             { () =>
                                                 <div class="mx-auto mb-2 max-w-md rounded-tile border border-line bg-field/80">
@@ -1044,7 +1062,7 @@ export default component ChatPage()
                                     { () =>
                                         <button
                                             type="button"
-                                            class="absolute bottom-3 end-3 z-10 flex h-11 w-11 cursor-pointer items-center justify-center rounded-full border border-line-strong bg-lifted text-text shadow-lg shadow-black/30 transition-colors hover:bg-raised sm:end-5"
+                                            class="absolute bottom-[calc(var(--chat-foot,0px)+0.75rem)] end-3 z-10 flex h-11 w-11 cursor-pointer items-center justify-center rounded-full border border-line-strong bg-lifted text-text shadow-lg shadow-black/30 transition-colors hover:bg-raised sm:end-5"
                                             aria-label={ toLatest }
                                             data-jump
                                             onClick={ toEnd }
@@ -1058,18 +1076,21 @@ export default component ChatPage()
                                 </Show>
                             </div>
 
+                            <div ref={ room('--chat-foot') } class="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex flex-col" data-chat-foot>
                             <Show when={ quiet }>
                                 { () =>
-                                    <div class="border-t border-line bg-void px-3 py-3 sm:px-5">
-                                        <QuietNote class="w-full" />
+                                    <div class="safe-b px-3 pb-2.5 sm:px-5">
+                                        <div class="pointer-events-auto rounded-[1.375rem] border border-line/70 bg-void/35 shadow-[var(--shadow-2)] backdrop-blur-xl backdrop-saturate-150 px-3 py-2.5">
+                                            <QuietNote class="w-full" />
+                                        </div>
                                     </div>
                                 }
                             </Show>
 
                             <Show when={ noticed }>
                                 { () =>
-                                    <div class="border-t border-line bg-void px-3 pt-2 sm:px-5">
-                                        <div class="w-full">
+                                    <div class="px-3 pt-2 sm:px-5">
+                                        <div class="pointer-events-auto w-full rounded-[1.375rem] border border-line/70 bg-void/35 shadow-[var(--shadow-2)] backdrop-blur-xl backdrop-saturate-150">
                                             <SealNotice stop={ stop } />
                                         </div>
                                     </div>
@@ -1089,9 +1110,11 @@ export default component ChatPage()
                                         onInput={ (value) => (editingNow === null ? chat.setDraft(id, value) : chat.editText(id, value)) }
                                         onSend={ () => (editingNow === null ? send() : save()) }
                                         onGame={ startGame }
+                                        floating
                                     />
                                 }
                             </Show>
+                            </div>
                         </div>
                     }
                 </Show>
