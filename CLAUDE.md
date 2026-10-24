@@ -53,8 +53,11 @@ WebSocket origin check, the check every write is held to and the cookie's site a
 production `loadServerConfig` refuses a secret under 32 characters and an origin with a path, an
 ending slash or plain http anywhere but this machine (`unsafeForProduction` in `env.ts`).
 
-**nginx sits in front and owns TLS and every cross-origin rule.** The api listens on `127.0.0.1`
-only, always, and speaks plain HTTP. It sends no CORS, `Cross-Origin-Resource-Policy` or
+**nginx sits in front and owns TLS and every cross-origin rule.** The api listens on `HOST`:
+`127.0.0.1` on the machine nginx runs on, and `0.0.0.0` in the Docker image, whose own loopback
+nothing outside reaches, with its port published to the proxy alone. It speaks plain HTTP, and in
+production trusts `X-Forwarded-For` (the rate limiter, `trustProxy`), so a port anybody but the
+proxy can reach lets a caller choose their own address. It sends no CORS, `Cross-Origin-Resource-Policy` or
 `Cross-Origin-Opener-Policy`: the framework's CORP default blocked every avatar (an absolute
 `${PUBLIC_ORIGIN}/avatars/...` link, also published to the chain) with
 `ERR_BLOCKED_BY_RESPONSE.NotSameOrigin` on any other origin. The WebSocket origin check in

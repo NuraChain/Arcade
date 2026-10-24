@@ -216,7 +216,7 @@ const handler = pipeline(
     signInRateLimit({ apiLimit: config.apiRateMax, trustProxy: config.env === 'production' })
 );
 
-const served = await serve(handler, { port: config.port, hostname: '127.0.0.1' });
+const served = await serve(handler, { port: config.port, hostname: config.host });
 
 // IMMEDIATELY after `serve`, with nothing awaited in between: until the upgrade listener is
 // registered, an Upgrade-flagged request falls through to `mountPages`' catch-all, and every

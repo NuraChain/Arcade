@@ -4,7 +4,7 @@ import { adopt } from '../src/env-file.ts';
 import { loadServerConfig } from '../src/env.ts';
 
 const NAMES = [
-    'NODE_ENV', 'PORT', 'DATABASE_URL', 'DATABASE_POOL_MAX', 'SESSION_SECRET', 'PUBLIC_ORIGIN', 'NURA_CHAIN_ID',
+    'NODE_ENV', 'HOST', 'PORT', 'DATABASE_URL', 'DATABASE_POOL_MAX', 'SESSION_SECRET', 'PUBLIC_ORIGIN', 'NURA_CHAIN_ID',
     'NURA_RPC_URL', 'NURA_PROFILE_ADDRESS', 'NURA_PROFILE_LENS_ADDRESS', 'NURA_EXPLORER_API', 'ADMIN_WALLET_ADDRESS',
     'API_RATE_MAX', 'VAPID_PUBLIC_KEY', 'VAPID_PRIVATE_KEY', 'VAPID_SUBJECT', 'VOICE_STUN_URLS', 'VOICE_TURN_URLS',
     'VOICE_TURN_SECRET', 'NURA_VAULT_ADDRESS', 'NURA_REFEREE_KEY'
@@ -12,6 +12,7 @@ const NAMES = [
 
 const NEEDED: Record<string, string> = {
     ...Object.fromEntries(NAMES.filter((name) => name !== 'NODE_ENV').map((name) => [name, ''])),
+    HOST: '127.0.0.1',
     PORT: '4900',
     API_RATE_MAX: '600',
     DATABASE_POOL_MAX: '10',

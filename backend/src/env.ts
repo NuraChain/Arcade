@@ -64,6 +64,12 @@ export function loadServerConfig()
     const env = loadConfig({ env: oneOf('NODE_ENV', MODES, { default: 'production' }) }).env;
 
     const shape = {
+            /**
+             * The address the server binds. A server on the machine nginx runs on listens on
+             * 127.0.0.1, so nothing reaches it past the proxy; a container's 127.0.0.1 is its own,
+             * so the image binds 0.0.0.0 and the port is published to the proxy alone.
+             */
+            host: str('HOST'),
             port: num('PORT'),
 
             databaseUrl: str('DATABASE_URL', { secret: true }),

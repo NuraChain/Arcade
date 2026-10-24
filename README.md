@@ -25,8 +25,8 @@ database says so in its log.
    `PUBLIC_ORIGIN` that carries a path or an ending slash, or is plain http anywhere but this
    machine, and says which. The optional features (push notifications, STUN and TURN for voice,
    the chain, the admin) stay off while their values are empty, and a name taken out of the file
-   stops the server, which names it. It listens on `127.0.0.1` at `PORT` (4900 in the example)
-   for the proxy. The server runs as production whenever it is not started by `npm run dev`.
+   stops the server, which names it. It listens on `HOST` (`127.0.0.1` in the example) at `PORT`
+   (4900) for the proxy. The server runs as production whenever it is not started by `npm run dev`.
 3. `npm run build`
 4. `npm run schema:sync` builds the database from the entities. Run it before the first start and
    after every update that changes them. It makes the database match the entities exactly, so a
