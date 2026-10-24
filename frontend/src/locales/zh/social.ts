@@ -37,6 +37,7 @@ export const social: Pick<Dictionary, keyof typeof reference> = {
     'person.blockedLead': '对方不能给你发消息、加入你的牌桌，也不能在搜索中找到你。',
     'person.minor': '已开启青少年保护的账户',
     'person.notFound': '查无此人。',
+    'person.signedOut': '连接钱包，即可添加 {name} 为好友、给对方发消息或一起坐上一张桌子。',
 
     'actions.title': '更多',
     'actions.about': '关于 {name} 的更多操作',

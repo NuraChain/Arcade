@@ -2278,6 +2278,27 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                 }));
             },
 
+            async shown(handle)
+            {
+                const subject = await social.personByHandle(handle);
+
+                if (subject === null || subject.is_minor)
+                {
+                    return null;
+                }
+
+                return {
+                    person: {
+                        handle: subject.handle,
+                        displayName: subject.display_name,
+                        bio: subject.bio,
+                        ...(subject.avatar === null ? {} : { avatar: subject.avatar }),
+                        hue: subject.hue
+                    },
+                    joinedAt: subject.created_at.toISOString()
+                };
+            },
+
             async view(me, handle)
             {
                 const [viewer, subject] = await Promise.all([social.person(me), social.personByHandle(handle)]);

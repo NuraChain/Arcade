@@ -34,6 +34,7 @@ export const social = {
     'person.blockedLead': 'They can’t message you, join your tables, or find you in search.',
     'person.minor': 'Account with teen safety on',
     'person.notFound': 'No such person.',
+    'person.signedOut': 'Connect a wallet to add {name} as a friend, write to them or sit down at a table together.',
 
     'actions.title': 'More',
     'actions.about': 'More about {name}',

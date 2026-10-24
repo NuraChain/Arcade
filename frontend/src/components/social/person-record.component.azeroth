@@ -20,7 +20,7 @@ import { useRecord } from '../../stores/record.store.ts';
 
 export type RecordPart = 'level' | 'record' | 'achievements' | 'history';
 
-export default component PersonRecord(props: { handle: string; history?: boolean; mine?: boolean; show?: RecordPart[]; game?: string; blank?: string })
+export default component PersonRecord(props: { handle: string; history?: boolean; mine?: boolean; show?: RecordPart[]; game?: string; blank?: string; signedOut?: boolean })
 {
     const locale = useLocale();
     const record = useRecord();
@@ -31,7 +31,7 @@ export default component PersonRecord(props: { handle: string; history?: boolean
 
     mount
     {
-        record.open(props.handle);
+        record.open(props.handle, props.signedOut === true);
 
         if (props.history === true)
         {
@@ -75,7 +75,7 @@ export default component PersonRecord(props: { handle: string; history?: boolean
     {
         void import('./achievement-ladder-sheet.component.azeroth').then((module) => overlay.open(
             module.default,
-            { handle: props.handle, family },
+            { handle: props.handle, family, signedOut: props.signedOut === true },
             { label: locale.text(family.name) }
         ));
     };

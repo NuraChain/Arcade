@@ -32,6 +32,7 @@ import type {
     MuteSubject,
     PersonSummary,
     PersonView,
+    PublicPerson,
     Privacy,
     ChatMessage,
     ConversationDevices,
@@ -159,6 +160,9 @@ export interface SocialPort
     directory(me: string, limit: number): Promise<PersonSummary[]>;
     search(me: string, asked: string, limit: number): Promise<PersonSummary[]>;
     names(handles: readonly string[]): Promise<PersonSummary[]>;
+
+    /** A profile for somebody signed out, or null for a handle nobody holds, a suspended account or a minor. */
+    shown(handle: string): Promise<PublicPerson | null>;
     suggestions(me: string, limit: number): Promise<{ person: PersonSummary; mutual: number }[]>;
 
     /** A profile as this viewer may see it, including whether they may write to it. */

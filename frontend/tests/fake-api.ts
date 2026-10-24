@@ -3028,6 +3028,53 @@ export const client =
         }
     },
 
+    /** What somebody with no wallet may read: a minor is answered as nobody, as the server does. */
+    public:
+    {
+        async person({ params }: { params: { handle: string } })
+        {
+            server.calls.push(`public.person ${ params.handle }`);
+            const one = PEOPLE_FIXTURES.find((fixture) => fixture.handle === params.handle);
+
+            if (one === undefined || personWire(params.handle).isMinor)
+            {
+                throw new ApiError(404, 'not-found', 'No account with that name.', undefined);
+            }
+
+            const wire = personWire(params.handle);
+
+            return {
+                person: { handle: wire.handle, displayName: wire.displayName, bio: wire.bio, hue: wire.hue, ...(wire.avatar === undefined ? {} : { avatar: wire.avatar }) },
+                joinedAt: '2026-09-01T00:00:00.000Z'
+            };
+        },
+
+        async face()
+        {
+            server.calls.push('public.face');
+            return { configured: false };
+        },
+
+        async record({ params }: { params: { handle: string } })
+        {
+            server.calls.push(`public.record ${ params.handle }`);
+            return { handle: params.handle, progress: { ...server.progress }, games: [], achievements: server.achievements };
+        },
+
+        async ladder({ params, query }: { params: { handle: string; family: string }; query: { game?: string } })
+        {
+            server.calls.push('public.ladder');
+            const found = server.ladders[`${ query.game ?? 'all' }-${ params.family }`];
+
+            if (found === undefined)
+            {
+                throw new ApiError(404, 'not-found', 'No such achievements.', undefined);
+            }
+
+            return found;
+        }
+    },
+
     social:
     {
         async graph()

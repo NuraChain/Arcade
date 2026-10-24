@@ -8,6 +8,7 @@ import AchievementTile from '../src/components/social/achievement-tile.component
 import PlayWithSheet from '../src/components/social/play-with-sheet.component.azeroth';
 import MePage from '../src/pages/app/me.page.azeroth';
 import PersonPage from '../src/pages/app/person.page.azeroth';
+import PublicPersonPage from '../src/pages/public-person.page.azeroth';
 import '../src/locales/app-catalogue.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
 import { useOverlay } from '../src/stores/overlay.store.ts';
@@ -488,5 +489,37 @@ describe('an achievement tile', () =>
         expect(rare).toContain('Rare');
         expect(rare).toContain('12%');
         expect(rare).toContain('of players have it');
+    });
+});
+
+describe('a profile for somebody with no wallet', () =>
+{
+    const visit = async (handle: string) =>
+    {
+        const table: Route[] = [{ path: '/people/:handle', component: PublicPersonPage as unknown as () => HTMLElement }];
+        const router = createRouter({ routes: table, history: createMemoryHistory(`/people/${ handle }`), scroll: false });
+        const { container } = renderTest(() => RouterProvider({ router, children: () => Routes({}) }) as HTMLElement);
+        await settle();
+        return container;
+    };
+
+    it('shows the face and the record from the public routes alone, and offers the way in', async () =>
+    {
+        const container = await visit('sara.k');
+
+        expect(container.textContent).toContain('sara.k');
+        expect(container.textContent).toContain('Connect a wallet to add sara.k as a friend');
+        expect([...container.querySelectorAll('button')].some((one) => one.textContent?.trim() === 'Connect wallet')).toBe(true);
+        expect(server.calls).toContain('public.person sara.k');
+        expect(server.calls).toContain('public.record sara.k');
+        expect(server.calls.filter((call) => call.startsWith('social.') || call === 'auth.me')).toEqual([]);
+    });
+
+    it('answers a minor as nobody', async () =>
+    {
+        const container = await visit('kian16');
+
+        expect(container.textContent).toContain('No such person');
+        expect(server.calls.some((call) => call.startsWith('public.record'))).toBe(false);
     });
 });

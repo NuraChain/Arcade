@@ -37,6 +37,7 @@ export const social: Pick<Dictionary, keyof typeof reference> = {
     'person.blockedLead': 'वो तुम्हें मैसेज नहीं कर सकते, तुम्हारी टेबल पर नहीं आ सकते, और सर्च में तुम्हें नहीं ढूँढ सकते।',
     'person.minor': 'टीन सेफ़्टी वाला अकाउंट',
     'person.notFound': 'ऐसा कोई नहीं है।',
+    'person.signedOut': '{name} को दोस्त बनाने, उन्हें मैसेज करने या साथ में किसी टेबल पर बैठने के लिए वॉलेट कनेक्ट करो।',
 
     'actions.title': 'और',
     'actions.about': '{name} के बारे में और',

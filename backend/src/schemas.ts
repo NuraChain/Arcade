@@ -1152,6 +1152,23 @@ export const personView = object({
 
 export type PersonView = Infer<typeof personView>;
 
+/**
+ * A profile as somebody who is not signed in sees it: the face and when they joined, and nothing a
+ * relationship decides. No online state, no last seen, no friends, and no account under 18 at all.
+ */
+export const publicPerson = object({
+    person: object({
+        handle: string(),
+        displayName: string(),
+        bio: string(),
+        avatar: string().optional(),
+        hue: number()
+    }),
+    joinedAt: string()
+});
+
+export type PublicPerson = Infer<typeof publicPerson>;
+
 export const personRef = object({ id: string() });
 
 export const voiceScope = enumOf(VOICE_SCOPES);

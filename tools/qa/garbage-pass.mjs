@@ -39,6 +39,8 @@ const QUERIES = {
     '/catalogue/games/:game/leaderboard': ['window', 'after'],
     '/chain/profile': ['lang'],
     '/chain/people/:handle': ['lang'],
+    '/public/people/:handle/face': ['lang'],
+    '/public/people/:handle/achievements/:family': ['game'],
     '/chain/nfts': ['offset', 'limit'],
     '/social/search': ['q'],
     '/social/names': ['handles'],
@@ -234,6 +236,7 @@ const run = async () =>
         '/devices/': mine.device,
         '/social/people/': theirs.handle,
         '/chain/people/': theirs.handle,
+        '/public/people/': theirs.handle,
         '/catalogue/games/': 'ludo'
     };
 

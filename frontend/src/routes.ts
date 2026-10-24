@@ -2,7 +2,7 @@ import type { PageRoute } from '@azerothjs/kit';
 
 import PublicShell from './components/layout/public-shell.component.azeroth';
 import { chunk } from './lib/chunks.ts';
-import { firstSection, requireAbility, requireAnonymous, requireSession, requireStaff } from './lib/guards.ts';
+import { firstSection, requireAbility, requireAnonymous, requireSession, requireStaff, signedOutPerson } from './lib/guards.ts';
 import { defineMeta } from './lib/route-meta.ts';
 import Landing from './pages/landing.page.azeroth';
 
@@ -20,6 +20,12 @@ export const routes: PageRoute[] = [
         lazy: chunk(() => import('./pages/sign-in.page.azeroth')),
         render: 'client',
         guard: requireAnonymous
+    },
+    {
+        path: '/people/:handle',
+        lazy: chunk(() => import('./pages/public-person.page.azeroth')),
+        render: 'client',
+        guard: signedOutPerson
     },
     {
         path: '/admin',

@@ -120,6 +120,7 @@ import {
     pushKey,
     pushSubscribeInput,
     personView,
+    publicPerson,
     privacy,
     privacyInput,
     reportInput,
@@ -361,6 +362,66 @@ export function buildApi(ports: Ports)
          * transactions come back UNSENT: composing calldata is this half's job, sending it is the
          * wallet's, and nothing on this server ever holds a key that could sign one.
          */
+        /**
+         * Profiles for somebody who has not connected a wallet, so a shared link opens for anyone.
+         *
+         * A public route publishes everything on it, so each read is the screen's and no more, and
+         * every one asks `shown` first: a minor, a suspended account and a handle nobody holds are
+         * one answer, the bytes of an account that does not exist.
+         */
+        public: feature('/public', (routes) =>
+        {
+            const shown = async (handle: string) =>
+            {
+                const person = await ports.social.shown(handle);
+
+                if (person === null)
+                {
+                    throw new NotFoundError('No account with that name.');
+                }
+
+                return person;
+            };
+
+            return {
+                person: routes.get('/people/:handle', { output: publicPerson }, (context) => shown(context.params.handle)),
+
+                face: routes.get('/people/:handle/face', { output: chainPerson, query: langQuery }, async (context) =>
+                {
+                    await shown(context.params.handle);
+                    const face = await ports.chain.person(context.params.handle, context.query.lang ?? '');
+
+                    return { configured: ports.chain.configured, ...(face === null || face === undefined ? {} : { profile: face }) };
+                }),
+
+                record: routes.get('/people/:handle/record', { output: personRecord }, async (context) =>
+                {
+                    await shown(context.params.handle);
+                    const found = await ports.match.record(context.params.handle);
+
+                    if (found === null)
+                    {
+                        throw new NotFoundError('No account with that name.');
+                    }
+
+                    return found;
+                }),
+
+                ladder: routes.get('/people/:handle/achievements/:family', { output: achievementLadder, query: ladderQuery }, async (context) =>
+                {
+                    await shown(context.params.handle);
+                    const found = await ports.match.ladder(context.params.handle, context.query.game ?? null, context.params.family);
+
+                    if (found === null)
+                    {
+                        throw new NotFoundError('No such achievements.');
+                    }
+
+                    return found;
+                })
+            };
+        }),
+
         chain: feature('/chain', [session], (routes) => ({
             profile: routes.get('/profile', { output: chainProfileState, query: langQuery }, async (context) =>
             {

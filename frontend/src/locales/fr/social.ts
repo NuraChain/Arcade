@@ -37,6 +37,7 @@ export const social: Pick<Dictionary, keyof typeof reference> = {
     'person.blockedLead': 'Cette personne ne peut pas t’écrire, rejoindre tes tables ni te trouver dans la recherche.',
     'person.minor': 'Compte avec la protection ado activée',
     'person.notFound': 'Cette personne n’existe pas.',
+    'person.signedOut': 'Connecte un portefeuille pour ajouter {name} en ami, lui écrire ou vous asseoir à une table ensemble.',
 
     'actions.title': 'Plus',
     'actions.about': 'Plus sur {name}',

@@ -4,7 +4,7 @@ import { createMemoryHistory, createRouter } from 'azerothjs';
 
 import { manualClock, type ManualClock } from '../src/lib/clock.ts';
 import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
-import { firstSection, requireAbility, requireAnonymous, requireSession, requireStaff, safeNext } from '../src/lib/guards.ts';
+import { firstSection, requireAbility, requireAnonymous, requireSession, requireStaff, safeNext, signedOutPerson } from '../src/lib/guards.ts';
 import { heldUp } from '../src/lib/held-up.ts';
 import NotFoundPage from '../src/pages/not-found.page.azeroth';
 import { useLocale } from '../src/stores/locale.store.ts';
@@ -477,6 +477,21 @@ describe('guards', () =>
     {
         const verdict = await requireSession(context('/app/friends'));
         expect(verdict).toMatchObject({ to: { pathname: '/sign-in', query: { next: '/app/friends' } } });
+    });
+
+    it('opens a profile to a stranger as its public page, and nothing else under /app', async () =>
+    {
+        expect(await requireSession(context('/app/people/sara.k'))).toMatchObject({ to: '/people/sara.k' });
+        expect(await requireSession(context('/app/people/sara.k/'))).toMatchObject({ to: '/people/sara.k' });
+        expect(await requireSession(context('/app/people'))).toMatchObject({ to: { pathname: '/sign-in' } });
+        expect(await requireSession(context('/app/people/sara.k/nfts'))).toMatchObject({ to: { pathname: '/sign-in' } });
+        expect(await signedOutPerson({ ...context('/people/sara.k'), params: { handle: 'sara.k' } })).toBe(true);
+    });
+
+    it('sends somebody signed in from a public profile to the whole one', async () =>
+    {
+        useSession().establish(DARYA);
+        expect(await signedOutPerson({ ...context('/people/sara.k'), params: { handle: 'sara.k' } })).toMatchObject({ to: '/app/people/sara.k' });
     });
 
     it('asks the server once and answers every navigation after it from the answer', async () =>

@@ -148,6 +148,17 @@ shows the handle as the title. The picture is kept only when it is one stored HE
 else would point every viewer's browser at a stranger's host. Everywhere else a person is drawn -
 lists, chat, tables - still uses this server's copy.
 
+**A profile opens for somebody with no wallet.** A link to `/app/people/:handle` is what people
+share, so `requireSession` sends a signed-out visitor there to `/people/:handle` (and that page sends
+anybody signed in back), where `public-person.page` draws the face, when they joined, the level, the
+record and the achievements from `/api/public/people/:handle` and its `face`, `record` and
+`achievements/:family`, routes that take no session. A public route publishes everything on it, so
+each sends what the screen draws and nothing a relationship decides: no online state, last seen,
+friends or a way to write. Every one asks `social.shown` first, and a minor, a suspended account
+and a handle nobody holds are one answer, the bytes of an account that is not there. In place of
+the actions is Connect wallet, which opens the chooser and comes back to the whole profile.
+`app.spec.ts`, `app-stores.spec.ts` (the guards) and `profile-page.spec.ts` hold it.
+
 **Saving the profile sheet IS the publish.** The owner updated a profile, saw it saved, and found
 the chain unchanged: Save wrote this server only and the chain write was a separate button on
 `/app/me` that nobody reached. Now Save uploads a new picture, claims the @handle, writes the server

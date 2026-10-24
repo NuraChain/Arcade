@@ -37,6 +37,7 @@ export const social: Pick<Dictionary, keyof typeof reference> = {
     'person.blockedLead': 'Sana mesaj atamaz, masalarına katılamaz ve seni aramada bulamaz.',
     'person.minor': 'Genç güvenliği açık hesap',
     'person.notFound': 'Böyle biri yok.',
+    'person.signedOut': 'Arkadaş eklemek, mesaj yazmak ya da birlikte bir masaya oturmak için cüzdanını bağla. Oyuncu: {name}',
 
     'actions.title': 'Daha fazla',
     'actions.about': 'Daha fazla: {name}',

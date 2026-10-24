@@ -17,13 +17,27 @@ async function settled(): Promise<{ signedIn: () => boolean }>
     return session;
 }
 
+const PERSON = /^\/app\/people\/([^/]+)\/?$/;
+
 export async function requireSession(context: GuardContext): Promise<GuardVerdict>
 {
     if ((await settled()).signedIn())
     {
         return true;
     }
-    return redirect({ pathname: '/sign-in', query: { next: context.pathname } });
+
+    // A profile is the one page somebody can be sent before they have a wallet, so its link works
+    // for them too: it opens as the public page, not as the way in.
+    const person = PERSON.exec(context.pathname);
+
+    return person === null
+        ? redirect({ pathname: '/sign-in', query: { next: context.pathname } })
+        : redirect(`/people/${ person[1] }`);
+}
+
+export async function signedOutPerson(context: GuardContext): Promise<GuardVerdict>
+{
+    return (await settled()).signedIn() ? redirect(`/app/people/${ encodeURIComponent(String(context.params.handle ?? '')) }`) : true;
 }
 
 async function staffRole()

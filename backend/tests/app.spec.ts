@@ -78,6 +78,50 @@ describe('the notice everybody sees', () =>
     });
 });
 
+describe('a profile for somebody signed out', () =>
+{
+    const SARA = { person: { handle: 'sara.k', displayName: 'Sara', bio: 'Plays Hokm', hue: 40 }, joinedAt: '2026-10-01T00:00:00.000Z' };
+    const asked: string[] = [];
+    const app = () => buildApp({
+        db: fakeDb({ initialized: true }),
+        config,
+        log: silent,
+        ports: {
+            identity: { principal: () => Promise.resolve(null) },
+            social: { shown: (handle: string) => Promise.resolve(handle === 'sara.k' ? { ...SARA, person: { ...SARA.person, isMinor: false, lastSeenAt: 'now' } } : null) },
+            match: {
+                record: (handle: string) =>
+                {
+                    asked.push(handle);
+                    return Promise.resolve(null);
+                }
+            },
+            chain: { configured: false, person: () => Promise.resolve(null) }
+        } as unknown as Ports
+    });
+
+    it('is read with no session, and carries nothing the screen does not draw', async () =>
+    {
+        const response = await call(app(), '/api/public/people/sara.k');
+
+        expect(response.status).toBe(200);
+        expect(await response.json()).toEqual(SARA);
+        expect(await (await call(app(), '/api/public/people/sara.k/face')).json()).toEqual({ configured: false });
+    });
+
+    it('answers a minor, a suspended account and a handle nobody holds alike, and asks nothing else about them', async () =>
+    {
+        asked.length = 0;
+        const missing = await call(app(), '/api/public/people/nobody');
+        const record = await call(app(), '/api/public/people/nobody/record');
+
+        expect(missing.status).toBe(404);
+        expect(record.status).toBe(404);
+        expect(await record.text()).toBe(await (await call(app(), '/api/public/people/nobody')).text());
+        expect(asked).toEqual([]);
+    });
+});
+
 describe('health', () =>
 {
     it('reports ok only when the database actually answers', async () =>

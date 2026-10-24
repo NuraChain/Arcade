@@ -38,7 +38,8 @@ export interface RecordApi
     historyFailed: Getter<boolean>;
     hasMore: Getter<boolean>;
 
-    open(handle: string): void;
+    /** `signedOut` reads the public record, the one a visitor with no wallet may see. */
+    open(handle: string, signedOut?: boolean): void;
     close(): void;
 
     /** Reads the next page of history, or the first one when nothing has been read yet. */
@@ -50,7 +51,7 @@ export interface RecordApi
 
 export const useRecord = createStore((): RecordApi =>
 {
-    const [handle, setHandle] = createSignal<string | null>(null);
+    const [handle, setHandle] = createSignal<{ who: string; signedOut: boolean } | null>(null);
     const [history, setHistory] = createSignal<MatchHistoryEntry[]>([]);
     const [cursor, setCursor] = createSignal<string | null>(null);
     const [exhausted, setExhausted] = createSignal(false);
@@ -59,7 +60,7 @@ export const useRecord = createStore((): RecordApi =>
 
     const record = createResource(
         () => handle(),
-        (who) => client.social.record({ params: { handle: who } }),
+        (asked) => (asked.signedOut ? client.public.record({ params: { handle: asked.who } }) : client.social.record({ params: { handle: asked.who } })),
         { name: 'record.person' }
     );
 
@@ -73,7 +74,7 @@ export const useRecord = createStore((): RecordApi =>
         historyFailed: failed,
         hasMore: () => !exhausted(),
 
-        open: (who) => setHandle(who),
+        open: (who, signedOut = false) => setHandle({ who, signedOut }),
 
         close()
         {

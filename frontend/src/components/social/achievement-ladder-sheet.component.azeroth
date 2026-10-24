@@ -12,13 +12,18 @@ import type { AchievementFamily } from '../../api.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import type { OverlayProps } from '../../stores/overlay.store.ts';
 
-export default component AchievementLadderSheet(props: OverlayProps & { handle: string; family: AchievementFamily })
+export default component AchievementLadderSheet(props: OverlayProps & { handle: string; family: AchievementFamily; signedOut?: boolean })
 {
     const locale = useLocale();
 
     const ladder = createResource(
         () => ({ handle: props.handle, family: props.family.id, game: props.family.game }),
-        (key) => client.social.ladder({ params: { handle: key.handle, family: key.family }, query: key.game === undefined ? {} : { game: key.game } }),
+        (key) =>
+        {
+            const asked = { params: { handle: key.handle, family: key.family }, query: key.game === undefined ? {} : { game: key.game } };
+
+            return props.signedOut === true ? client.public.ladder(asked) : client.social.ladder(asked);
+        },
         { name: 'record.ladder' }
     );
 

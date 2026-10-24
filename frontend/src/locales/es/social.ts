@@ -37,6 +37,7 @@ export const social: Pick<Dictionary, keyof typeof reference> = {
     'person.blockedLead': 'No puede escribirte, unirse a tus mesas ni encontrarte en la búsqueda.',
     'person.minor': 'Cuenta con la protección para adolescentes activada',
     'person.notFound': 'Esa persona no existe.',
+    'person.signedOut': 'Conecta una billetera para agregar a {name} como amigo, escribirle o sentarte a una mesa juntos.',
 
     'actions.title': 'Más',
     'actions.about': 'Más sobre {name}',

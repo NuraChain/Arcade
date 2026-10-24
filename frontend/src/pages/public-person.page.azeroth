@@ -1,0 +1,155 @@
+import { createResource, untrack, useHead, useNavigate, useParams, type MountNode } from 'azerothjs';
+
+import '../icons/all.ts';
+import { ApiError, client } from '../api.ts';
+import OverlayHost from '../components/app/overlay-host.component.azeroth';
+import SiteFooter from '../components/layout/site-footer.component.azeroth';
+import SiteHeader from '../components/layout/site-header.component.azeroth';
+import PersonRecord from '../components/social/person-record.component.azeroth';
+import ProfileHeader from '../components/social/profile-header.component.azeroth';
+import Button from '../components/ui/button.component.azeroth';
+import EmptyState from '../components/ui/empty-state.component.azeroth';
+import ErrorState from '../components/ui/error-state.component.azeroth';
+import Panel from '../components/ui/panel.component.azeroth';
+import Skeleton from '../components/ui/skeleton.component.azeroth';
+import '../locales/app-catalogue.ts';
+import { useLocale } from '../stores/locale.store.ts';
+import { useRecord } from '../stores/record.store.ts';
+import { useWallet } from '../stores/wallet.store.ts';
+
+/**
+ * A profile for somebody who has not connected a wallet, so a link to one opens for anybody.
+ *
+ * What it shows is what the public routes send: the face, when they joined, the level, the record
+ * and the achievements. Nothing a relationship decides - whether they are online, friends, a way to
+ * write to them - because a visitor has none. In their place is the way in, which comes back here.
+ */
+export default component PublicPersonPage()
+{
+    const locale = useLocale();
+    const record = useRecord();
+    const wallet = useWallet();
+    const params = useParams();
+    const { navigate } = useNavigate();
+
+    const opened = untrack(() => params().handle ?? '');
+
+    mount
+    {
+        return wallet.start();
+    }
+
+    const view = createResource(
+        () => (opened === '' ? null : opened),
+        async (handle) =>
+        {
+            try
+            {
+                return await client.public.person({ params: { handle } });
+            }
+            catch (error)
+            {
+                if (error instanceof ApiError && error.status === 404)
+                {
+                    return null;
+                }
+                throw error;
+            }
+        },
+        { name: 'public.person' }
+    );
+
+    const face = createResource(
+        () => (opened === '' ? null : { handle: opened, lang: locale.locale() }),
+        (asked) => client.public.face({ params: { handle: asked.handle }, query: { lang: asked.lang } }),
+        { name: 'public.face' }
+    );
+
+    derived person = view.data()?.person ?? null;
+
+    derived missing = view.data() === null;
+
+    derived failed = person === null && view.error() !== null;
+
+    derived loading = person === null && !missing && !failed;
+
+    derived shown = face.data()?.profile;
+
+    derived name = person === null
+        ? missing ? locale.t('person.notFound') : opened
+        : (shown?.displayName ?? '') === '' ? person.handle : shown!.displayName;
+
+    useHead({ title: () => `${ name } · ${ locale.t('app.title') }` });
+
+    derived held = record.record();
+
+    derived stats = [
+        { label: locale.t('profile.stat.games'), value: (held?.games ?? []).reduce((sum, one) => sum + one.played, 0) },
+        { label: locale.t('profile.stat.wins'), value: (held?.games ?? []).reduce((sum, one) => sum + one.won, 0) },
+        { label: locale.t('profile.stat.achievements'), value: (held?.achievements.scopes ?? []).reduce((total, one) => total + one.earned, 0) }
+    ];
+
+    let Chooser: ((props: { close: () => void; navigate: (to: string) => void }) => MountNode) | null = null;
+
+    state chooserOpen = false;
+    state chooserLoaded = false;
+
+    const enter = () =>
+    {
+        chooserOpen = true;
+        if (chooserLoaded)
+        {
+            return;
+        }
+        void import('../components/layout/connect-dialog.component.azeroth').then((module) =>
+        {
+            Chooser = module.default;
+            chooserLoaded = true;
+        });
+    };
+
+    <div class="[--page-pad:max(1rem,env(safe-area-inset-left),env(safe-area-inset-right))] sm:[--page-pad:max(1.5rem,env(safe-area-inset-left),env(safe-area-inset-right))] lg:[--page-pad:max(2rem,env(safe-area-inset-left),env(safe-area-inset-right))] relative flex min-h-dvh flex-col bg-void text-text">
+        <SiteHeader cta={ false } />
+
+        <main id="main" class="page-pad safe-b relative mx-auto flex w-full max-w-[48rem] flex-1 flex-col gap-6 pb-12 pt-24 sm:pt-28">
+            <Show when={ loading }>
+                { () => <Skeleton class="h-64 w-full rounded-panel" /> }
+            </Show>
+
+            <Show when={ failed }>
+                { () => <ErrorState onRetry={ () => void view.refetch() } /> }
+            </Show>
+
+            <Show when={ missing }>
+                { () => <EmptyState icon="me" title={ locale.t('person.notFound') } action={ locale.t('nav.connect') } onAction={ enter } class="py-12" /> }
+            </Show>
+
+            <Show when={ person } let={ them }>
+                <div class="flex flex-col gap-6">
+                    <ProfileHeader
+                        person={ { ...them, displayName: shown?.displayName ?? '', avatar: shown?.avatar ?? '' } }
+                        presence={ null }
+                        bio={ shown?.bio ?? '' }
+                        stats={ stats }
+                        progress={ held?.progress ?? null }
+                        joined={ view.data()?.joinedAt ?? '' }
+                    />
+
+                    <Panel stack="sm">
+                        <p class="text-ui-base text-muted">{ locale.t('person.signedOut', { name }) }</p>
+                        <Button variant="primary" leading="wallet" class="self-start" onClick={ enter }>{ locale.t('wallet.connect') }</Button>
+                    </Panel>
+
+                    <PersonRecord handle={ them.handle } show={ ['record', 'achievements'] } signedOut />
+                </div>
+            </Show>
+
+            <Show when={ chooserOpen && chooserLoaded }>
+                { () => Chooser!({ close: () => chooserOpen = false, navigate: () => navigate(`/app/people/${ encodeURIComponent(opened) }`, { replace: true }) }) }
+            </Show>
+        </main>
+
+        <SiteFooter />
+        <OverlayHost />
+    </div>
+}
