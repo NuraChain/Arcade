@@ -7,6 +7,7 @@ export const VAULT_ADMIN_KEY = '0xdbda1821b80551c9d65939329250298aa3472ba22feea9
 export const VAULT_REFEREE_KEY = '0x2a871d0798f97d79848a013d4936a73bf4cc922c825d33c1cf7073dff6d409c6';
 
 export const VAULT_FEE = 500;
+export const VAULT_REFERRAL_SHARE = 2000;
 export const VAULT_MAX_STAKE = parseEther('1000');
 export const VAULT_RECLAIM_AFTER = 3n * 24n * 3600n;
 
@@ -25,7 +26,7 @@ export async function deployVault(rpc = process.env.QA_RPC ?? 'http://127.0.0.1:
     const hash = await wallet.deployContract({
         abi,
         bytecode,
-        args: [admin.address, referee.address, VAULT_FEE, VAULT_MAX_STAKE, VAULT_RECLAIM_AFTER]
+        args: [admin.address, referee.address, VAULT_FEE, VAULT_REFERRAL_SHARE, VAULT_MAX_STAKE, VAULT_RECLAIM_AFTER]
     });
     const receipt = await reader.waitForTransactionReceipt({ hash });
 
