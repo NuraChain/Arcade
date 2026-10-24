@@ -15,8 +15,6 @@ export const wallet: Pick<Dictionary, keyof typeof reference> = {
     'wallet.free': 'साइन करना मुफ़्त',
     'wallet.noGas': 'न गैस, न ट्रांज़ैक्शन',
     'wallet.selfCustody': 'तुम्हारी चाबियाँ तुम्हारे पास',
-    'wallet.install': 'MetaMask इंस्टॉल करो',
-    'wallet.installLead': 'इस ब्राउज़र में अभी कोई वॉलेट नहीं है। कोई भी ब्राउज़र वॉलेट चलेगा — MetaMask में लगभग एक मिनट लगता है।',
     'wallet.learn': '{chain} क्या है?',
     'wallet.error.rejected': 'तुमने मना कर दिया। कुछ नहीं हुआ।',
     'wallet.error.pending': 'तुम्हारा वॉलेट पहले से कुछ पूछ रहा है। उसे खोलो और जवाब दो।',

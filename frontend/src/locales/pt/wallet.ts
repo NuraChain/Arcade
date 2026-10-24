@@ -15,8 +15,6 @@ export const wallet: Pick<Dictionary, keyof typeof reference> = {
     'wallet.free': 'Assinatura grátis',
     'wallet.noGas': 'Sem gas, sem transação',
     'wallet.selfCustody': 'Suas chaves continuam suas',
-    'wallet.install': 'Instalar a MetaMask',
-    'wallet.installLead': 'Ainda não tem carteira neste navegador. Qualquer carteira de navegador serve — a MetaMask leva mais ou menos um minuto.',
     'wallet.learn': 'O que é a {chain}?',
     'wallet.error.rejected': 'Você recusou. Nada aconteceu.',
     'wallet.error.pending': 'Sua carteira já está pedindo. Abra e responda.',

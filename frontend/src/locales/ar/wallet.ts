@@ -15,8 +15,6 @@ export const wallet: Pick<Dictionary, keyof typeof reference> = {
     'wallet.free': 'التوقيع مجاني',
     'wallet.noGas': 'لا رسوم غاز، ولا معاملة',
     'wallet.selfCustody': 'مفاتيحك تبقى لك',
-    'wallet.install': 'ثبّت MetaMask',
-    'wallet.installLead': 'لا توجد محفظة في هذا المتصفح بعد. أي محفظة متصفح تفي بالغرض — وMetaMask يأخذ نحو دقيقة.',
     'wallet.learn': 'ما هي {chain}؟',
     'wallet.error.rejected': 'رفضت الطلب. لم يحدث شيء.',
     'wallet.error.pending': 'محفظتك تطلب بالفعل. افتحها وأجب.',

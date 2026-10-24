@@ -340,11 +340,27 @@ describe('the wallet chooser', () =>
         warn.mockRestore();
     });
 
+    it('on the sign-in page with no wallet in the browser, offers Connect wallet and opens the chooser with it', async () =>
+    {
+        const choose = vi.fn();
+        renderTest(() => WalletPanel({ onConnected: vi.fn(), onChoose: choose }) as HTMLElement);
+        await settle();
+
+        const connect = [...document.querySelectorAll('button')].find((one) => one.textContent?.trim() === 'Connect wallet');
+
+        expect(document.querySelector('a[href="https://metamask.io/download/"]')).toBeNull();
+        expect(connect).toBeDefined();
+
+        fire(connect!, 'click');
+
+        expect(choose).toHaveBeenCalledTimes(1);
+    });
+
     it('on the sign-in page, says the failure that happened last', async () =>
     {
         const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
         useWallet().adopt(fakeProvider());
-        renderTest(() => WalletPanel({ onConnected: vi.fn() }) as HTMLElement);
+        renderTest(() => WalletPanel({ onConnected: vi.fn(), onChoose: vi.fn() }) as HTMLElement);
         await settle();
 
         const press = () => fire([...document.querySelectorAll('button')].find((one) => /Connect wallet|Try again/.test(one.textContent ?? ''))!, 'click');
@@ -415,7 +431,7 @@ describe('the wallet chooser', () =>
     {
         const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
         useWallet().adopt(fakeProvider());
-        renderTest(() => WalletPanel({ onConnected: vi.fn() }) as HTMLElement);
+        renderTest(() => WalletPanel({ onConnected: vi.fn(), onChoose: vi.fn() }) as HTMLElement);
         await settle();
 
         const press = () => fire([...document.querySelectorAll('button')].find((one) => /Connect wallet|Try again/.test(one.textContent ?? ''))!, 'click');

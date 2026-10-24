@@ -10,7 +10,7 @@ import Spinner from '../ui/spinner.component.azeroth';
 import Tooltip from '../ui/tooltip.component.azeroth';
 import { PANEL_TONE } from '../ui/variants.ts';
 
-export default component WalletPanel(props: { onConnected: (account: Account) => void })
+export default component WalletPanel(props: { onConnected: (account: Account) => void; onChoose: () => void })
 {
     const locale = useLocale();
     const wallet = useWallet();
@@ -131,12 +131,9 @@ export default component WalletPanel(props: { onConnected: (account: Account) =>
             <Show
                 when={ wallet.available() }
                 fallback={
-                    <>
-                        <p class="text-ui-base text-muted">{ locale.t('wallet.installLead') }</p>
-                        <Button variant="primary" size="lg" block href="https://metamask.io/download/" icon="forward">
-                            { locale.t('wallet.install') }
-                        </Button>
-                    </>
+                    <Button variant="primary" size="lg" block leading="wallet" onClick={ props.onChoose }>
+                        { locale.t('wallet.connect') }
+                    </Button>
                 }
             >
                 { () =>

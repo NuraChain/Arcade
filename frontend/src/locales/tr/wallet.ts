@@ -15,8 +15,6 @@ export const wallet: Pick<Dictionary, keyof typeof reference> = {
     'wallet.free': 'İmzalamak ücretsiz',
     'wallet.noGas': 'Gas yok, işlem yok',
     'wallet.selfCustody': 'Anahtarların sende kalır',
-    'wallet.install': 'MetaMask kur',
-    'wallet.installLead': 'Bu tarayıcıda henüz cüzdan yok. Her tarayıcı cüzdanı olur — MetaMask yaklaşık bir dakika sürer.',
     'wallet.learn': 'Bu ağ ne? ({chain})',
     'wallet.error.rejected': 'Reddettin. Hiçbir şey olmadı.',
     'wallet.error.pending': 'Cüzdanın zaten soruyor. Aç ve yanıtla.',

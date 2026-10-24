@@ -12,8 +12,6 @@ export const wallet = {
     'wallet.free': 'Free to sign',
     'wallet.noGas': 'No gas, no transaction',
     'wallet.selfCustody': 'Your keys stay yours',
-    'wallet.install': 'Install MetaMask',
-    'wallet.installLead': 'No wallet in this browser yet. Any browser wallet works — MetaMask takes about a minute.',
     'wallet.learn': 'What is {chain}?',
     'wallet.error.rejected': 'You turned that down. Nothing happened.',
     'wallet.error.pending': 'Your wallet is already asking. Open it and answer.',

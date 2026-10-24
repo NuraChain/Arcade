@@ -76,13 +76,16 @@ export default component SignInPage()
                     account.adoptWallet(established);
                     leave();
                 } }
+                onChoose={ openChooser }
             />
 
-            <div class="mt-3 flex justify-center">
-                <Button variant="ghost" size="sm" leading="wallet" onClick={ openChooser }>
-                    { locale.t('wallet.other') }
-                </Button>
-            </div>
+            <Show when={ wallet.available() }>
+                <div class="mt-3 flex justify-center">
+                    <Button variant="ghost" size="sm" leading="wallet" onClick={ openChooser }>
+                        { locale.t('wallet.other') }
+                    </Button>
+                </div>
+            </Show>
 
             <Show when={ chooserOpen && chooserLoaded }>
                 { () => Chooser!({ close: () => chooserOpen = false, navigate: () => leave() }) }
