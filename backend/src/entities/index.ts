@@ -31,6 +31,7 @@ import { PaidAccount } from './paid-account.entity.ts';
 import { PushSubscription } from './push-subscription.entity.ts';
 import { RecoveryNonce } from './recovery-nonce.entity.ts';
 import { RecoveryVault } from './recovery-vault.entity.ts';
+import { Referral } from './referral.entity.ts';
 import { Report } from './report.entity.ts';
 import { Session } from './session.entity.ts';
 import { SiweNonce } from './siwe-nonce.entity.ts';
@@ -48,7 +49,7 @@ export {
     EpochArchive, FriendRequest, Friendship,
     Game, GameRule, Group, GroupMember, Match, MatchAction, MatchPlayer, Message, Mute,
     Notice, Notification, PaidAccount, PlayerStats, PushSubscription,
-    QuickTable, RecoveryNonce, RecoveryVault, Report, Session, SiweNonce, StaffAction, StaffMember, StakeConsent, Suspension, Table, TableRemoval, TableSeat, TableStake, User,
+    QuickTable, RecoveryNonce, RecoveryVault, Referral, Report, Session, SiweNonce, StaffAction, StaffMember, StakeConsent, Suspension, Table, TableRemoval, TableSeat, TableStake, User,
     UserAchievement, Wallet
 };
 
@@ -67,7 +68,7 @@ export const entities: Function[] = [
     User, Avatar, Wallet, Session, SiweNonce, Device,
     Friendship, FriendRequest, Block, Mute, Report,
     Conversation, ConversationMember, Message, ConversationEpoch, EpochKey, EpochArchive,
-    RecoveryVault, RecoveryNonce,
+    RecoveryVault, RecoveryNonce, Referral,
     Group, GroupMember,
     Table, TableSeat, TableRemoval, QuickTable,
     Match, MatchPlayer, MatchAction, PlayerStats, UserAchievement,
