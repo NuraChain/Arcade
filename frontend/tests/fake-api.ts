@@ -314,7 +314,7 @@ function mustDevice(id: string)
     return found;
 }
 
-const CHAIN_REGISTRY = '0x8CFbcEf737BE3C67A52A20Ae3DCC685ACF759460';
+const CHAIN_REGISTRY = '0x491497D8b191921d6E5AAE92f16Fe3F9BBd93dc9';
 
 export const NURA_VAULT = '0x5FbDB2315678afecb367f032d93F642f64180aa3';
 
