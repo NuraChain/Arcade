@@ -83,7 +83,7 @@ export default component TextArea(props: {
             ref={ (element) => { field = element; fit(); } }
             id={ props.id }
             rows={ 1 }
-            class="min-h-9 w-full min-w-0 flex-1 resize-none bg-transparent py-1.5 text-ui-input leading-snug text-text outline-none placeholder:text-faint coarse:min-h-11"
+            class="min-h-9 w-full min-w-0 flex-1 resize-none bg-transparent py-1.5 text-ui-input leading-6 text-text outline-none placeholder:text-faint coarse:min-h-11 coarse:py-2.5"
             dir="auto"
             value={ props.value }
             placeholder={ props.placeholder }
