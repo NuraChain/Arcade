@@ -186,7 +186,7 @@ export default component SiteDrawer(props: {
 
                 <section aria-labelledby="drawer-language" class="flex flex-col gap-2">
                     <h2 id="drawer-language" class="label text-ui-xs text-faint">{ locale.t('locale.label') }</h2>
-                    <LanguageSwitch class="w-full" />
+                    <LanguageSwitch class="w-full" grid />
                 </section>
             </div>
         </div>

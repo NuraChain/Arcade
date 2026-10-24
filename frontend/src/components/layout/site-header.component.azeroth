@@ -62,7 +62,7 @@ export default component SiteHeader(props: { cta?: boolean })
 
             <div class="ms-auto flex items-center gap-2">
                 <div class="hidden sm:block">
-                    <LanguageSwitch />
+                    <LanguageSwitch class="w-40" />
                 </div>
                 <Show when={ props.cta !== false }>
                     { () =>

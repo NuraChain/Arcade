@@ -7,6 +7,8 @@ export interface SelectOption
 {
     value: string;
     label: string;
+    image?: string;
+    lang?: string;
 }
 
 let serial = 0;
@@ -16,6 +18,7 @@ export default component Select(props: {
     value: string;
     options: readonly SelectOption[];
     hint?: string;
+    hideLabel?: boolean;
     disabled?: boolean;
     class?: string;
     onChange: (value: string) => void;
@@ -49,9 +52,10 @@ export default component Select(props: {
         }
 
         const box = boxOf(trigger);
-        const spot = place(box, { width: box.width, height: list.offsetHeight }, viewportOf(), { side: 'bottom', align: 'start', gap: 6, padding: 8 });
+        const width = Math.max(box.width, list.offsetWidth);
+        const spot = place(box, { width, height: list.offsetHeight }, viewportOf(), { side: 'bottom', align: 'start', gap: 6, padding: 8 });
 
-        at = { x: spot.x, y: spot.y, width: box.width, placed: true };
+        at = { x: spot.x, y: spot.y, width, placed: true };
         list.focus({ preventScroll: true });
         reveal();
     };
@@ -202,7 +206,7 @@ export default component Select(props: {
     }
 
     <div class={ [ 'flex min-w-0 flex-col gap-1.5', props.class ?? '' ].filter(Boolean).join(' ') }>
-        <span id={ `${ id }-label` } class="text-ui-sm font-semibold text-text">{ props.label }</span>
+        <span id={ `${ id }-label` } class={ props.hideLabel === true ? 'sr-only' : 'text-ui-sm font-semibold text-text' }>{ props.label }</span>
         <button
             ref={ (element) => trigger = element }
             type="button"
@@ -219,7 +223,10 @@ export default component Select(props: {
             onClick={ () => (open ? close(true) : show()) }
             onKeyDown={ onTrigger }
         >
-            <span id={ `${ id }-value` } class="min-w-0 flex-1 truncate" dir="auto">{ chosen?.label ?? '' }</span>
+            <Show when={ chosen?.image !== undefined }>
+                { () => <img src={ chosen?.image } alt="" width="20" height="15" class="h-3.75 w-5 shrink-0 rounded-[2px] object-cover shadow-1" /> }
+            </Show>
+            <span id={ `${ id }-value` } class="min-w-0 flex-1 truncate" dir="auto" lang={ chosen?.lang }>{ chosen?.label ?? '' }</span>
             <Icon name="chevron-down" size={ 16 } class={ open ? 'shrink-0 rotate-180 text-accent transition-transform duration-150' : 'shrink-0 text-muted transition-transform duration-150' } />
         </button>
         <Show when={ props.hint !== undefined }>
@@ -234,7 +241,7 @@ export default component Select(props: {
                             id={ `${ id }-list` }
                             role="listbox"
                             tabindex="-1"
-                            class="absolute left-(--x) top-(--y) inline-(--w) max-block-[min(18rem,50dvh)] overflow-y-auto overscroll-contain rounded-panel border border-line-strong bg-lifted p-1 [box-shadow:var(--shadow-2)] pointer-events-auto opacity-0 [outline:none] data-[placed=true]:opacity-100 data-[placed=true]:[animation:tooltip-in_120ms_var(--ease-ui)_both] motion-reduce:data-[placed=true]:animate-none"
+                            class="absolute left-(--x) top-(--y) min-inline-(--w) max-inline-[calc(100vw-1rem)] max-block-[min(18rem,50dvh)] overflow-y-auto overscroll-contain rounded-panel border border-line-strong bg-lifted p-1 [box-shadow:var(--shadow-2)] pointer-events-auto opacity-0 [outline:none] data-[placed=true]:opacity-100 data-[placed=true]:[animation:tooltip-in_120ms_var(--ease-ui)_both] motion-reduce:data-[placed=true]:animate-none"
                             data-placed={ at.placed ? 'true' : 'false' }
                             style={ `--x: ${ at.x }px; --y: ${ at.y }px; --w: ${ at.width }px` }
                             aria-labelledby={ `${ id }-label` }
@@ -252,7 +259,10 @@ export default component Select(props: {
                                     onPointerMove={ () => active = one.index }
                                     onClick={ () => pick(one.index) }
                                 >
-                                    <span class="min-w-0 flex-1 truncate" dir="auto">{ one.label }</span>
+                                    <Show when={ one.image !== undefined }>
+                                        { () => <img src={ one.image } alt="" width="20" height="15" class="h-3.75 w-5 shrink-0 rounded-[2px] object-cover shadow-1" /> }
+                                    </Show>
+                                    <span class="min-w-0 flex-1 truncate" dir="auto" lang={ one.lang }>{ one.label }</span>
                                     <Show when={ one.value === props.value }>
                                         { () => <Icon name="selected" size={ 16 } class="shrink-0 text-accent" /> }
                                     </Show>

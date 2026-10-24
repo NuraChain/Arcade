@@ -1,6 +1,11 @@
+import Select from '../ui/select.component.azeroth';
 import { LOCALES, LOCALE_LABEL, useLocale, type Locale } from '../../stores/locale.store.ts';
 
-export default component LanguageSwitch(props: { class?: string })
+const OPTIONS = LOCALES.map((name) => ({ value: name, label: LOCALE_LABEL[name], lang: name, image: `/flags/${ name }.svg` }));
+
+// `grid` is for the drawer: it is a modal dialog, and a listbox portalled out of the top layer
+// would be drawn under it and never take a press.
+export default component LanguageSwitch(props: { class?: string; grid?: boolean })
 {
     const locale = useLocale();
 
@@ -12,24 +17,37 @@ export default component LanguageSwitch(props: { class?: string })
         }
     };
 
-    <div
-        class={ () => ['flex items-center gap-0.5 rounded-control bg-sunk p-0.5', props.class ?? ''].join(' ') }
-        role="group"
-        aria-label={ locale.t('locale.label') }
+    <Show
+        when={ props.grid === true }
+        fallback={
+            <Select
+                class={ props.class }
+                label={ locale.t('locale.label') }
+                hideLabel
+                value={ locale.locale() }
+                options={ OPTIONS }
+                onChange={ (next) => press(next as Locale) }
+            />
+        }
     >
-        <For each={ LOCALES } key={ (name) => name } let={ name }>
-            <button
-                type="button"
-                lang={ name }
-                class={ () => [
-                    'flex h-8 flex-1 items-center justify-center rounded-[0.375rem] px-3 text-ui-sm font-semibold transition-colors duration-150 coarse:h-11 coarse:px-4',
-                    locale.locale() === name ? 'cursor-default bg-raised text-text shadow-1' : 'cursor-pointer text-muted hover:text-text'
-                ].join(' ') }
-                aria-pressed={ locale.locale() === name }
-                onClick={ () => press(name) }
-            >
-                { LOCALE_LABEL[name] }
-            </button>
-        </For>
-    </div>
+        { () =>
+            <div class={ [ 'grid grid-cols-2 gap-1 rounded-control bg-sunk p-1', props.class ?? '' ].join(' ') } role="group" aria-label={ locale.t('locale.label') }>
+                <For each={ OPTIONS } key={ (one) => one.value } let={ one }>
+                    <button
+                        type="button"
+                        lang={ one.lang }
+                        class={ () => [
+                            'flex h-11 min-w-0 items-center gap-2 rounded-[0.375rem] px-3 text-ui-sm font-semibold transition-colors duration-150',
+                            locale.locale() === one.value ? 'cursor-default bg-raised text-text shadow-1' : 'cursor-pointer text-muted hover:text-text'
+                        ].join(' ') }
+                        aria-pressed={ locale.locale() === one.value }
+                        onClick={ () => press(one.value) }
+                    >
+                        <img src={ one.image } alt="" width="20" height="15" loading="lazy" class="h-3.75 w-5 shrink-0 rounded-[2px] object-cover shadow-1" />
+                        <span class="min-w-0 truncate">{ one.label }</span>
+                    </button>
+                </For>
+            </div>
+        }
+    </Show>
 }

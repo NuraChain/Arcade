@@ -836,12 +836,15 @@ try
         await sound.click();
         await soon(async () => await sound.getAttribute('aria-checked') === before, 4000);
 
-        await page.locator('button[lang="fa"]').first().click();
+        const language = page.locator('#settings-appearance button[aria-haspopup="listbox"]');
+        await language.click();
+        await page.getByRole('option', { name: 'فارسی' }).click();
         record('choosing Persian flips the page to rtl Persian', await soon(async () => await page.evaluate(() => document.documentElement.lang === 'fa' && document.documentElement.dir === 'rtl'), 6000),
             await page.evaluate(() => `${ document.documentElement.lang } ${ document.documentElement.dir }`));
         record('the page is written in Persian', await soon(async () => /[\u0600-\u06FF]/.test(await page.locator('main h1').first().innerText()), 4000), await page.locator('main h1').first().innerText().catch(() => ''));
 
-        await page.locator('button[lang="en"]').first().click();
+        await language.click();
+        await page.getByRole('option', { name: 'English' }).click();
         record('choosing English brings it back', await soon(async () => await page.evaluate(() => document.documentElement.lang === 'en' && document.documentElement.dir === 'ltr'), 6000)
             && await soon(async () => (await page.locator('main h1').first().innerText()).includes('Settings'), 4000));
     });

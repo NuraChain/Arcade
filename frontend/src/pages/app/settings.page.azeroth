@@ -275,7 +275,7 @@ export default component SettingsPage()
                         <Panel stack="md">
                             <div class="flex flex-wrap items-center justify-between gap-3">
                                 <span class="text-ui-md font-semibold text-text">{ locale.t('settings.appearance.language') }</span>
-                                <LanguageSwitch />
+                                <LanguageSwitch class="w-48" />
                             </div>
                             <Show when={ device.reducedMotion() }>
                                 { () =>
