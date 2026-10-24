@@ -46,8 +46,9 @@ development, vitest declares test, and anything else is production: `npm start`.
 `env-file.ts` takes the root `.env` in for every name but `NODE_ENV`, so a `.env` copied from
 a laptop cannot put a server into development, where the wallet fixtures, whose keys are public,
 are seeded. Production serves the pages and never syncs the schema; development is the other way
-round. **A production `.env` needs three things**: `DATABASE_URL`, a real `SESSION_SECRET`, and
-`PUBLIC_ORIGIN` set to the origin the browser uses - it is the site in every sign-in text, the
+round. **A `.env` writes every name in `.env.example`**, and in production the three that matter
+most are `DATABASE_URL`, a real `SESSION_SECRET`, and `PUBLIC_ORIGIN` set to the origin the browser
+uses - it is the site in every sign-in text, the
 WebSocket origin check, the check every write is held to and the cookie's site at once. In
 production `loadServerConfig` refuses a secret under 32 characters and an origin with a path, an
 ending slash or plain http anywhere but this machine (`unsafeForProduction` in `env.ts`).
@@ -89,19 +90,21 @@ the third so nobody re-investigates it.
   `process.env.VITE_USER_NODE_ENV ??= ''` in the vite config stops a `NODE_ENV` written in that file
   turning a build into a development bundle.
 - **The `.env` holds only what the operator alone can know** (the owner, 2026-10-14: "we have a lot
-  of useless things on env that can handle automaticly"). Three names are needed: `DATABASE_URL`,
-  `SESSION_SECRET` and, in production, `PUBLIC_ORIGIN`; `loadServerConfig` refuses to start without
-  any of them and names every one missing. The optional features (push, STUN and TURN, the chain,
-  paid tables, the admin) are off while their names are left out or empty. Everything else has a value in the
-  code: what differs between development and production follows from the mode, the paths of the
-  build follow from where the server lives, the socket limits are constants (`realtime/limits.ts`),
-  and `PORT` (4900), `API_RATE_MAX` (600) and `DATABASE_POOL_MAX` (10) are numbers a deployment may
-  write to change. NuraChain's public facts for the browser are constants in `data/chain.ts`. A
-  secret never has a value in code. Do not add a name for something the code can work out.
+  of useless things on env that can handle automaticly"), **and every name in it is required**
+  (the owner, 2026-10-23: "make every variable in .env required, remove all default values").
+  The code has a value for no name in `.env.example`: `loadServerConfig` refuses to start while any
+  is missing, in either mode, and names every one (`unwritten` in `env.ts` asks for the features'
+  names, since the framework reads an empty value as an absent one). The optional features (push,
+  STUN and TURN, the chain, paid tables, the admin) are off while their values are written EMPTY.
+  `PORT`, `API_RATE_MAX` and `DATABASE_POOL_MAX` are written like the rest, and vite's dev proxy
+  reads `PORT` from the same file. What differs between development and production follows from
+  the mode, the paths of the build follow from where the server lives, the socket limits are
+  constants (`realtime/limits.ts`), and NuraChain's public facts for the browser are constants in
+  `data/chain.ts`. Do not add a name for something the code can work out.
 - `.env.example` is committed: every variable the server reads, with a placeholder and a sentence,
-  the three needed first and the numbers with a value in code written as comments. Only public
-  values are real there (the Nurachain id, rpc and contract addresses). A personal value - an admin
-  wallet included - goes in `.env` only.
+  the three secrets of the operator first. Only public values are real there (the Nurachain id,
+  rpc and contract addresses, the numbers). A personal value - an admin wallet included - goes in
+  `.env` only.
 - No absolute path naming a machine. `~` is fine; `/c/Users/<somebody>` is a person's name.
 - The `0x…` keys in tests, `seed-wallets.ts`, `tools/qa/vault-deploy.mjs` and `tools/qa/admin-pass.mjs`
   are hardhat's published accounts; nothing else here is key material (`recovery.ts`'s look-alike is the P-256 curve order).

@@ -15,7 +15,7 @@ database says so in its log.
 
 1. As an ordinary account, not root (`sudo adduser nura`, say), clone the repository and run
    `npm ci` at its root. The service runs as whoever owns the clone.
-2. Copy `.env.example` to `.env` and fill in the three things it needs:
+2. Copy `.env.example` to `.env`. Every name in it must stay written; fill in these three:
    - `DATABASE_URL` pointing at an empty database;
    - `SESSION_SECRET`: a long random string, such as the output of `openssl rand -hex 32`;
    - `PUBLIC_ORIGIN`: the address people use, such as `https://play.example.com` (it is the site
@@ -24,9 +24,9 @@ database says so in its log.
    The server refuses to start with a `SESSION_SECRET` shorter than 32 characters, or a
    `PUBLIC_ORIGIN` that carries a path or an ending slash, or is plain http anywhere but this
    machine, and says which. The optional features (push notifications, STUN and TURN for voice,
-   the chain, the admin) stay off until their lines are filled in. It listens on `127.0.0.1:4900`
-   for the proxy; write `PORT` to choose another port. Nothing else needs writing: the server
-   runs as production whenever it is not started by `npm run dev`.
+   the chain, the admin) stay off while their values are empty, and a name taken out of the file
+   stops the server, which names it. It listens on `127.0.0.1` at `PORT` (4900 in the example)
+   for the proxy. The server runs as production whenever it is not started by `npm run dev`.
 3. `npm run build`
 4. `npm run schema:sync` builds the database from the entities. Run it before the first start and
    after every update that changes them. It makes the database match the entities exactly, so a
