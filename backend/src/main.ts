@@ -191,7 +191,7 @@ const app = buildApp({
             // Negotiated per request from the cookie `setLocale()` writes, then Accept-Language.
             // `prefix` routing is what search engines want and is recorded as broken in
             // AzerothJS/framework-bugs.md #1 - the router has no client half for it.
-            locales: { supported: ['en', 'fa'], default: 'en', routing: 'negotiate' }
+            locales: { supported: ['en', 'fa', 'ar', 'es', 'pt', 'hi', 'zh', 'ru', 'fr', 'tr'], default: 'en', routing: 'negotiate' }
         }
 });
 

@@ -69,7 +69,10 @@ const ROUTES = [
     { id: 'sign-in', path: '/sign-in', anonymous: true }
 ];
 
-const LOCALES = ['en', 'fa'];
+// Every language a run tours costs a whole pass; English and Persian (one each way) are the default.
+const TAGS = { en: 'en-US', fa: 'fa-IR', ar: 'ar-EG', es: 'es-ES', pt: 'pt-BR', hi: 'hi-IN', zh: 'zh-CN', ru: 'ru-RU', fr: 'fr-FR', tr: 'tr-TR' };
+
+const LOCALES = process.env.QA_LOCALES?.split(',') ?? ['en', 'fa'];
 
 // The account the matrix tours as, and it signs in the way a person does: fetch the challenge,
 // sign it with the wallet, post the signature. There is no demo door any more - and there should
@@ -419,7 +422,7 @@ async function main()
                     deviceScaleFactor: 1,
                     hasTouch: width < 1024,
                     isMobile: width < 768,
-                    locale: locale === 'fa' ? 'fa-IR' : 'en-US',
+                    locale: TAGS[locale],
                     storageState
                 });
 

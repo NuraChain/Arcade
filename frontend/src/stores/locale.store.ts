@@ -7,42 +7,80 @@ import type { MessageKey } from '../locales/en.ts';
 import { landing as enLanding } from '../locales/en/landing.ts';
 import { interpolate, relativeUnit, resolveMessage, type Message, type MessageVars } from '../locales/format.ts';
 
-export type Locale = 'en' | 'fa';
+export type Locale = 'en' | 'fa' | 'ar' | 'es' | 'pt' | 'hi' | 'zh' | 'ru' | 'fr' | 'tr';
 
-export const LOCALES: Locale[] = ['en', 'fa'];
+export const LOCALES: Locale[] = ['en', 'fa', 'ar', 'es', 'pt', 'hi', 'zh', 'ru', 'fr', 'tr'];
 
 export const LOCALE_LABEL: Record<Locale, string> = {
     en: 'English',
-    fa: 'فارسی'
+    fa: 'فارسی',
+    ar: 'العربية',
+    es: 'Español',
+    pt: 'Português',
+    hi: 'हिन्दी',
+    zh: '中文',
+    ru: 'Русский',
+    fr: 'Français',
+    tr: 'Türkçe'
 };
 
 export const LOCALE_DIR: Record<Locale, 'ltr' | 'rtl'> = {
     en: 'ltr',
-    fa: 'rtl'
+    fa: 'rtl',
+    ar: 'rtl',
+    es: 'ltr',
+    pt: 'ltr',
+    hi: 'ltr',
+    zh: 'ltr',
+    ru: 'ltr',
+    fr: 'ltr',
+    tr: 'ltr'
 };
 
 export const LOCALE_TAG: Record<Locale, string> = {
     en: 'en-US',
-    fa: 'fa-IR'
+    fa: 'fa-IR',
+    // ar-SA formats dates in the Hijri calendar in Chromium; Egypt's tag keeps the Gregorian one.
+    ar: 'ar-EG',
+    es: 'es-ES',
+    pt: 'pt-BR',
+    hi: 'hi-IN',
+    zh: 'zh-CN',
+    ru: 'ru-RU',
+    fr: 'fr-FR',
+    tr: 'tr-TR'
 };
 
 type Catalogue = Partial<Record<MessageKey, Message>>;
 
-const CATALOG: Record<Locale, Catalogue> = { en: { ...enLanding }, fa: {} };
+const CATALOG = Object.fromEntries(LOCALES.map((locale) => [locale, locale === 'en' ? { ...enLanding } : {}])) as Record<Locale, Catalogue>;
 
 const present = new Set<Locale>(['en']);
 
-export function registerCatalogue(pages: Record<Locale, Catalogue>)
+export function registerCatalogue(pages: Partial<Record<Locale, Catalogue>>)
 {
-    for (const locale of LOCALES)
+    for (const [locale, catalogue] of Object.entries(pages) as Array<[Locale, Catalogue]>)
     {
-        Object.assign(CATALOG[locale], pages[locale]);
-        if (Object.keys(pages[locale]).length > 0)
+        Object.assign(CATALOG[locale], catalogue);
+        if (Object.keys(catalogue).length > 0)
         {
             present.add(locale);
         }
     }
 }
+
+// English and Persian ride the app's own catalogue chunks (frontend/CLAUDE.md, *The app catalogue
+// is NOT split by language*); every other language is one chunk of its own, fetched by its reader.
+const WHOLE: Partial<Record<Locale, () => Promise<Catalogue>>> = {
+    ar: async () => (await import('../locales/ar/index.ts')).ar,
+    es: async () => (await import('../locales/es/index.ts')).es,
+    pt: async () => (await import('../locales/pt/index.ts')).pt,
+    hi: async () => (await import('../locales/hi/index.ts')).hi,
+    zh: async () => (await import('../locales/zh/index.ts')).zh,
+    ru: async () => (await import('../locales/ru/index.ts')).ru,
+    fr: async () => (await import('../locales/fr/index.ts')).fr,
+    tr: async () => (await import('../locales/tr/index.ts')).tr
+};
 
 export async function loadCatalogue(locale: Locale)
 {
@@ -50,8 +88,14 @@ export async function loadCatalogue(locale: Locale)
     {
         return;
     }
+    const whole = WHOLE[locale];
+    if (whole !== undefined)
+    {
+        registerCatalogue({ [locale]: await whole() });
+        return;
+    }
     const { landing } = await import('../locales/fa/landing.ts');
-    registerCatalogue({ en: {}, fa: landing });
+    registerCatalogue({ fa: landing });
 }
 
 export function messageOf(at: Locale, key: MessageKey)
@@ -59,7 +103,7 @@ export function messageOf(at: Locale, key: MessageKey)
     return CATALOG[at][key] ?? CATALOG.en[key] ?? key;
 }
 
-function isLocale(value: string | null | undefined): value is Locale
+export function isLocale(value: string | null | undefined): value is Locale
 {
     return value !== undefined && value !== null && (LOCALES as string[]).includes(value);
 }

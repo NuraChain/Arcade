@@ -3,7 +3,7 @@ import { bootClient } from '@azerothjs/kit/client';
 import App from './App.azeroth';
 import { watchChunks } from './lib/chunks.ts';
 import { setRuntime } from './lib/runtime.ts';
-import { loadCatalogue } from './stores/locale.store.ts';
+import { isLocale, loadCatalogue } from './stores/locale.store.ts';
 
 if (import.meta.env.DEV)
 {
@@ -26,9 +26,10 @@ if (import.meta.env.DEV)
 
 watchChunks();
 
-if (document.documentElement.lang === 'fa')
+const lang = document.documentElement.lang;
+if (isLocale(lang) && lang !== 'en')
 {
-    await loadCatalogue('fa');
+    await loadCatalogue(lang);
 }
 
 bootClient(App);

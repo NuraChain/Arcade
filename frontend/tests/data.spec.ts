@@ -3,7 +3,16 @@ import { describe, it, expect } from 'vitest';
 import { GAMES, gameBySlug } from '../src/data/games.ts';
 import { en, type Dictionary } from '../src/locales/en.ts';
 import { fa } from '../src/locales/fa.ts';
-import { messageText } from '../src/locales/format.ts';
+import { ar } from '../src/locales/ar/index.ts';
+import { es } from '../src/locales/es/index.ts';
+import { pt } from '../src/locales/pt/index.ts';
+import { hi } from '../src/locales/hi/index.ts';
+import { zh } from '../src/locales/zh/index.ts';
+import { ru } from '../src/locales/ru/index.ts';
+import { fr } from '../src/locales/fr/index.ts';
+import { tr } from '../src/locales/tr/index.ts';
+import { messageText, type PluralForms } from '../src/locales/format.ts';
+import { LOCALES, LOCALE_TAG, type Locale } from '../src/stores/locale.store.ts';
 import { PARTY_ENDS, PARTY_REFUSALS } from '../../backend/src/domains/party/rules.ts';
 
 describe('games catalogue', () =>
@@ -100,6 +109,51 @@ describe('message catalogues', () =>
 
         expect(compose(en)).toBe(en['brand.name']);
         expect(compose(fa)).toBe(messageText(fa['brand.name']));
+    });
+});
+
+describe('the languages past English and Persian', () =>
+{
+    const DICTIONARIES: Array<[Locale, Dictionary]> = [['ar', ar], ['es', es], ['pt', pt], ['hi', hi], ['zh', zh], ['ru', ru], ['fr', fr], ['tr', tr]];
+    const keys = Object.keys(en) as Array<keyof typeof en>;
+    const placeholders = (text: string): string[] => (text.match(/\{[a-zA-Z0-9_]+\}/g) ?? []).sort();
+
+    it('has a catalogue for every language the switch offers', () =>
+    {
+        expect(['en', 'fa', ...DICTIONARIES.map(([locale]) => locale)].sort()).toEqual([...LOCALES].sort());
+    });
+
+    it.each(DICTIONARIES)('%s says every key, with every placeholder English uses', (_, dictionary) =>
+    {
+        for (const key of keys)
+        {
+            expect(messageText(dictionary[key]) === '', key).toBe(messageText(en[key]) === '');
+            expect(typeof dictionary[key], `${ key } changes shape`).toBe(typeof en[key]);
+            expect(placeholders(messageText(dictionary[key])), key).toEqual(placeholders(messageText(en[key])));
+        }
+    });
+
+    it.each(DICTIONARIES)('%s spells every plural form its own language selects', (locale, dictionary) =>
+    {
+        const cardinal = new Intl.PluralRules(LOCALE_TAG[locale]).resolvedOptions().pluralCategories;
+        const ordinal = new Intl.PluralRules(LOCALE_TAG[locale], { type: 'ordinal' }).resolvedOptions().pluralCategories;
+        for (const key of keys)
+        {
+            const forms = dictionary[key];
+            if (typeof forms !== 'string')
+            {
+                const wanted = key === 'match.place' ? ordinal : cardinal;
+                expect(wanted.filter((category) => (forms as PluralForms)[category as keyof PluralForms] === undefined), `${ key } in ${ locale }`).toEqual([]);
+            }
+        }
+    });
+
+    it.each(DICTIONARIES)('%s assembles the brand mark to the full name', (_, dictionary) =>
+    {
+        const composed = `${ messageText(dictionary['brand.lead']) } ${ messageText(dictionary['brand.accent']) } ${ messageText(dictionary['brand.trail']) }`
+            .replace(/\s+/g, ' ')
+            .trim();
+        expect(composed).toBe(messageText(dictionary['brand.name']));
     });
 });
 

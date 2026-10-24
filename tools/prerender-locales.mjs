@@ -4,6 +4,10 @@ import { pathToFileURL } from 'node:url';
 
 import { prerender } from '@azerothjs/kit/prerender';
 
+const LOCALES = ['en', 'fa', 'ar', 'es', 'pt', 'hi', 'zh', 'ru', 'fr', 'tr'];
+
+const RTL = new Set(['fa', 'ar']);
+
 const client = resolve(import.meta.dirname, '..', '.dist-frontend');
 const entry = await import(pathToFileURL(resolve(import.meta.dirname, '..', '.dist-server', 'entry.server.js')).href);
 
@@ -11,7 +15,7 @@ const written = await prerender({
     routes: entry.routes,
     clientDir: client,
     renderer: entry.renderPage,
-    locales: ['en', 'fa']
+    locales: LOCALES
 });
 
 console.log(`  prerender   ${ written.join(', ') }`);
@@ -20,8 +24,9 @@ const BESIDE = '(min-width: 64rem), (orientation: landscape) and (max-height: 54
 
 const UPRIGHT = '(max-width: 63.99rem) and (not ((orientation: landscape) and (max-height: 540px) and (min-aspect-ratio: 4/3)))';
 
-for (const [locale, wide] of [['en', 'poster-wide-ltr'], ['fa', 'poster-wide-rtl']])
+for (const locale of LOCALES)
 {
+    const wide = RTL.has(locale) ? 'poster-wide-rtl' : 'poster-wide-ltr';
     const file = resolve(client, `index.${ locale }.html`);
     const page = readFileSync(file, 'utf8');
     const preload = [

@@ -550,7 +550,7 @@ else if (worldBytes > WORLD_BUDGET)
     problems.push(`the world chunk is ${ size(worldBytes) }, over ${ size(WORLD_BUDGET) }`);
 }
 
-for (const locale of ['en', 'fa'])
+for (const locale of ['en', 'fa', 'ar', 'es', 'pt', 'hi', 'zh', 'ru', 'fr', 'tr'])
 {
     if (!existsSync(join(DIST, `index.${ locale }.html`)))
     {

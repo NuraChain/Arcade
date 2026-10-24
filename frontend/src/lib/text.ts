@@ -1,8 +1,17 @@
 import type { Locale } from '../stores/locale.store.ts';
 
-export type LocalizedText = Record<Locale, string>;
+/** What the server writes in two languages; every other reader is given the English. */
+export interface LocalizedText
+{
+    en: string;
+    fa: string;
+}
 
 export function pickText(text: LocalizedText | string, locale: Locale)
 {
-    return typeof text === 'string' ? text : text[locale];
+    if (typeof text === 'string')
+    {
+        return text;
+    }
+    return locale === 'fa' ? text.fa : text.en;
 }

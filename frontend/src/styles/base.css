@@ -9,7 +9,8 @@
         -webkit-font-smoothing: antialiased;
     }
 
-    html:lang(fa)
+    html:lang(fa),
+    html:lang(ar)
     {
         --font-display: var(--font-persian);
         --font-ui: var(--font-persian);
@@ -28,10 +29,24 @@
 
     html:lang(fa) h1,
     html:lang(fa) h2,
-    html:lang(fa) h3
+    html:lang(fa) h3,
+    html:lang(ar) h1,
+    html:lang(ar) h2,
+    html:lang(ar) h3,
+    html:lang(hi) h1,
+    html:lang(hi) h2,
+    html:lang(hi) h3,
+    html:lang(zh) h1,
+    html:lang(zh) h2,
+    html:lang(zh) h3
     {
         letter-spacing: normal;
         line-height: 1.4;
+    }
+
+    html:lang(hi)
+    {
+        line-height: 1.8;
     }
 
     fieldset

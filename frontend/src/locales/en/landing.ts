@@ -64,7 +64,7 @@ export const landing = {
     'landing.compete.levels.body': 'Playing earns XP and your level shows it. It is a trophy; nothing is locked behind it.',
 
     'landing.finale.title': 'Pull up a chair',
-    'landing.finale.lead': 'Sign in with MetaMask, Trust Wallet or Nura Wallet. Play in English or Persian.',
+    'landing.finale.lead': 'Sign in with MetaMask, Trust Wallet or Nura Wallet. Play in your own language.',
 
     'footer.rights': 'All rights reserved.',
     'locale.label': 'Language',

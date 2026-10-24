@@ -67,7 +67,7 @@ export const landing: Pick<Dictionary, keyof typeof reference> = {
     'landing.compete.levels.body': 'بازی کردن امتیاز تجربه میاره و سطحت اینو نشون می‌ده. یه افتخاره؛ هیچی پشتش قفل نیست.',
 
     'landing.finale.title': 'بیا سر میز',
-    'landing.finale.lead': 'با متامسک، تراست ولت یا کیف پول نورا وارد شو. فارسی یا انگلیسی بازی کن.',
+    'landing.finale.lead': 'با متامسک، تراست ولت یا کیف پول نورا وارد شو. به زبون خودت بازی کن.',
 
     'footer.rights': 'همه‌ی حقوق محفوظه.',
     'locale.label': 'زبان',
