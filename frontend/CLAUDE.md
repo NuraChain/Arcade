@@ -1948,15 +1948,32 @@ it with a hyphen and one without breaks it at the edge, and either way the whole
 
 ## RTL
 
-English and Persian. **Logical properties only** — `ms-`/`me-`, `ps-`/`pe-`, `start-`/`end-`,
+Ten languages: English, Persian, Arabic, Spanish, Portuguese, Hindi, Chinese, Russian, French and
+Turkish (`LOCALES` in `stores/locale.store.ts`); Persian and Arabic read right to left. **Logical properties only** — `ms-`/`me-`, `ps-`/`pe-`, `start-`/`end-`,
 `border-s`/`border-e`. Every number wears `tally` so a range cannot reverse inside a mirrored
 line. The 3D world does not mirror; the UI over it does. Anything that flips with the reading
 direction — a chevron, an arrow, a send icon — takes `icon-flip`.
 
-Both catalogues are split by area under `locales/{en,fa}/` and typed
-`Pick<Dictionary, keyof typeof reference>`, so a key missing from Persian is a build error and a
-key that is *identical* in both languages fails `tests/data.spec.ts`. Interpolation-only strings
-therefore do not belong in the catalogue.
+Every catalogue is split by area under `locales/<code>/` and typed
+`Pick<Dictionary, keyof typeof reference>`, so a key missing from any language is a build error. A
+key *identical* in English and Persian fails `tests/data.spec.ts`; the other eight are held to every
+placeholder, each message's shape, and every plural form `Intl.PluralRules` selects for their own
+tag (Arabic's six, Russian's four, Chinese's one), because `selectForm` falls back to `other`
+quietly. Interpolation-only strings therefore do not belong in the catalogue.
+
+**Only English and Persian ride the app's chunks.** Each of the other eight is one lazy chunk
+(`locales/<code>/index.ts`, the whole dictionary, landing and admin included) fetched by
+`loadCatalogue` for its reader alone, before hydration when `<html lang>` names it. Do not add one
+to `app-catalogue.ts`, `admin-catalogue.ts` or `wallet-catalogue.ts`: a language with any strings
+registered counts as present, and `setLocale` would then skip its fetch. What the server sends in
+two languages (`LocalizedText`: a game's blurb, an achievement, the announcement) reads as English
+for everybody but a Persian reader (`pickText`). Hindi and Chinese use the system's fonts.
+
+**The switch is a dropdown of flags** (`components/layout/language-switch`, on `Select`), each
+flag an `<img>` of `public/flags/<code>.svg` (from flag-icons, MIT, minified; Spain's is the civil
+flag, the coat of arms being 80 KB that a 20px flag cannot show), so a flag costs the landing no
+JavaScript. In the drawer it is a grid of buttons instead, because the drawer is a modal dialog
+and a listbox portalled out of the top layer is drawn under it.
 
 **Persian is written the way people talk.** The owner asked for natural, everyday Iranian Persian
 (فارسی محاوره‌ای) everywhere, restructured rather than translated word for word, and every Persian
@@ -2039,10 +2056,10 @@ theirs and not the table's, so it does follow the page.
 The language is not carried in the url, because AzerothJS prefix routing is recorded as broken in the
 framework's own `framework-bugs.md`. It is a `locale` COOKIE, written by the framework's own
 `setLocale`, so the server can answer the first request in it: `tools/prerender-locales.mjs` writes
-`index.en.html` and `index.fa.html`, and `mountPages` picks one by the cookie and then by
-`Accept-Language`. A Persian reader gets Persian HTML with no JavaScript and no flash of English. The
-Persian landing catalogue is a dynamic import, awaited before hydration only when `<html lang>` is
-`fa`, so an English reader never downloads it. The build CLI does not pass `locales` to the
+`index.<code>.html` for all ten (`entry.server.ts` registers every landing catalogue), and
+`mountPages` picks one by the cookie and then by `Accept-Language`. A Persian reader gets Persian
+HTML with no JavaScript and no flash of English. The Persian landing catalogue is a dynamic import,
+awaited before hydration only when `<html lang>` is `fa`, so an English reader never downloads it. The build CLI does not pass `locales` to the
 prerenderer, which is why the script exists; it is in the framework register.
 
 ## No glyph the OS draws
