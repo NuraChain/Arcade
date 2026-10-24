@@ -107,7 +107,7 @@ describe('the vault, as its owner sees it', () =>
 
     it('raises the alarm for a referee running out of gas or out of its role, and for a vault short of what it owes', async () =>
     {
-        vaultWith({ solvent: false, referee: { address: '0xa0Ee7A142d267C1f36714E4a8F75612F20a79720', gas: '100000000000000000', games: '2', low: true, allowed: false } });
+        vaultWith({ solvent: false, referee: { address: '0xa0Ee7A142d267C1f36714E4a8F75612F20a79720', gas: '100000000000000000', games: '2', low: true, allowed: false, named: OWNER } });
         const container = await shown();
 
         expect(said(container, '[data-low]')).toBe('Running low. Send it NURA before games have to wait to be locked and paid.');
@@ -118,7 +118,7 @@ describe('the vault, as its owner sees it', () =>
 
     it('says nothing about games it cannot price, and says the vault is paused when it is', async () =>
     {
-        vaultWith({ paused: true, referee: { address: '0xa0Ee7A142d267C1f36714E4a8F75612F20a79720', gas: '0', low: false, allowed: true } });
+        vaultWith({ paused: true, referee: { address: '0xa0Ee7A142d267C1f36714E4a8F75612F20a79720', gas: '0', low: false, allowed: true, named: '0xa0Ee7A142d267C1f36714E4a8F75612F20a79720' } });
         const container = await shown();
 
         expect(container.querySelector('[data-games]')).toBeNull();
@@ -282,6 +282,82 @@ describe('the vault, as its owner sees it', () =>
 
         expect(server.calls).toContain('admin.fees 1000000000000000000');
         expect(toasts()).toEqual(['success The fees are in this wallet.']);
+    });
+
+    it('lists the fee each game takes, and gives a game a fee of its own or the vault\'s again', async () =>
+    {
+        const container = await shown();
+        const send = sending();
+
+        expect([...container.querySelectorAll('[data-game-fee]')].map((row) => [...row.children].map((cell) => cell.textContent?.trim()).join(' '))).toEqual([
+            'Hokm 7% Its own fee Use the vault’s fee',
+            'Poker 5% The vault’s fee',
+            'Backgammon 5% The vault’s fee',
+            'Ludo 5% The vault’s fee',
+            'Chess 5% The vault’s fee'
+        ]);
+
+        const field = container.querySelector<HTMLInputElement>('#admin-game-fee')!;
+
+        typeInto(field, '20');
+        fire(button(container, 'Set the fee')!, 'click');
+        await settle();
+
+        expect(said(container, '#admin-game-fee-error')).toBe('Write a fee from 1% to 15%, like 4 or 2.5.');
+        expect(send).not.toHaveBeenCalled();
+
+        typeInto(field, '3');
+        fire(button(container, 'Set the fee')!, 'click');
+        await settle();
+
+        expect(server.calls).toContain('admin.gameFee hokm 300');
+        expect(toasts()).toContain('success Hokm now takes 3%.');
+        expect(field.value).toBe('');
+
+        fire(button(container.querySelector('[data-game-fee="hokm"]')!, 'Use the vault’s fee')!, 'click');
+        await settle();
+
+        expect(server.calls).toContain('admin.gameFee hokm 0');
+        expect(toasts()).toContain('success Hokm now takes the vault’s fee.');
+    });
+
+    it('asks before it changes the referee, and composes nothing for an address that is not one', async () =>
+    {
+        const container = await shown();
+        const asked = () => useOverlay().items().find((one) => one.phase !== 'closing')!;
+        const field = container.querySelector<HTMLInputElement>('#admin-referee')!;
+
+        sending();
+        typeInto(field, '0x1234');
+        fire(button(container, 'Change the referee')!, 'click');
+        await settle();
+
+        expect(said(container, '#admin-referee-error')).toBe('Write an address: 0x and then 40 letters and digits.');
+        expect(useOverlay().items().filter((one) => one.phase !== 'closing')).toHaveLength(0);
+
+        typeInto(field, OWNER);
+        fire(button(container, 'Change the referee')!, 'click');
+        await settle();
+
+        expect(asked().props).toMatchObject({ confirm: 'Change the referee', cancel: 'Keep this referee', destructive: true });
+        expect(server.calls.filter((call) => call.startsWith('admin.referee'))).toEqual([]);
+
+        useOverlay().close(asked().id, true);
+        await settle();
+
+        expect(server.calls).toContain(`admin.referee ${ OWNER }`);
+        expect(field.value).toBe('');
+    });
+
+    it('offers no change of a game\'s fee or the referee to a wallet that cannot make one', async () =>
+    {
+        vaultWith({ roles: { admin: false, pauser: true } });
+        const container = await shown();
+
+        expect(container.querySelectorAll('[data-game-fee]')).toHaveLength(5);
+        expect(container.querySelector('#admin-game-fee')).toBeNull();
+        expect(container.querySelector('#admin-referee')).toBeNull();
+        expect(button(container, 'Use the vault’s fee')).toBeUndefined();
     });
 
     it('asks before it pauses the vault, as a question that loses something, keeps it open when told not now, and opens it again', async () =>

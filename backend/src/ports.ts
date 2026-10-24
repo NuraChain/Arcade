@@ -574,6 +574,10 @@ export interface AdminPort
 
     fee(me: string, feeBps: number): Promise<WalletCall | null>;
 
+    gameFee(me: string, game: string, feeBps: number): Promise<WalletCall | null>;
+
+    referee(me: string, address: string): Promise<WalletCall | null>;
+
     ceiling(me: string, amount: string): Promise<WalletCall | null>;
 
     fees(me: string, amount: string): Promise<WalletCall | null>;

@@ -55,6 +55,8 @@ import {
     adminSuspendInput,
     adminVault,
     adminFeeInput,
+    adminGameFeeInput,
+    adminRefereeInput,
     adminPauseInput,
     staffInput,
     staffList,
@@ -398,6 +400,12 @@ export function buildApi(ports: Ports)
 
             fee: routes.post('/vault/fee', { input: adminFeeInput, output: walletCall },
                 async (context) => onlyAdmin(await ports.admin.fee(context.principal.userId, context.input.bps))),
+
+            gameFee: routes.post('/vault/game-fee', { input: adminGameFeeInput, output: walletCall },
+                async (context) => onlyAdmin(await ports.admin.gameFee(context.principal.userId, context.input.game, context.input.bps))),
+
+            referee: routes.post('/vault/referee', { input: adminRefereeInput, output: walletCall },
+                async (context) => onlyAdmin(await ports.admin.referee(context.principal.userId, context.input.address))),
 
             ceiling: routes.post('/vault/ceiling', { input: vaultAmountInput, output: walletCall },
                 async (context) => onlyAdmin(await ports.admin.ceiling(context.principal.userId, context.input.amount))),

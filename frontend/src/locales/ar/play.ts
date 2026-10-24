@@ -201,6 +201,8 @@ export const play: Pick<Dictionary, keyof typeof reference> = {
     'tables.refused.vault-role': 'هذه المحفظة لا تملك ذلك الدور في الخزنة.',
     'tables.refused.vault-fee': 'الرسوم بين 1% و15%.',
     'tables.refused.vault-fees': 'لا تحتفظ الخزنة بهذا القدر من الرسوم.',
+    'tables.refused.vault-game': 'لا توجد لعبة بهذا الاسم تُلعب على NURA.',
+    'tables.refused.vault-referee': 'هذا ليس عنوانًا يمكن للخزنة اعتماده.',
     'tables.refused.vault-paused': 'الخزنة متوقفة مؤقتًا بالفعل.',
     'tables.refused.vault-running': 'الخزنة ليست متوقفة.',
     'tables.refused.vault-refused': 'سترفض الخزنة ذلك.',

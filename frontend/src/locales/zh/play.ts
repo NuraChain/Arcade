@@ -201,6 +201,8 @@ export const play: Pick<Dictionary, keyof typeof reference> = {
     'tables.refused.vault-role': '这个钱包在金库上没有这个角色。',
     'tables.refused.vault-fee': '手续费在 1% 到 15% 之间。',
     'tables.refused.vault-fees': '金库里没有这么多手续费。',
+    'tables.refused.vault-game': '没有这个名称的 NURA 付费游戏。',
+    'tables.refused.vault-referee': '这不是金库可以设定的地址。',
     'tables.refused.vault-paused': '金库已经暂停了。',
     'tables.refused.vault-running': '金库没有暂停。',
     'tables.refused.vault-refused': '金库会拒绝这个操作。',

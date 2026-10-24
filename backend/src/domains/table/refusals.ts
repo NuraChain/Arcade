@@ -25,6 +25,8 @@ export const TABLE_REFUSALS = {
     'paid-done': 409,
     'vault-role': 409,
     'vault-fee': 422,
+    'vault-game': 422,
+    'vault-referee': 422,
     'vault-fees': 409,
     'vault-paused': 409,
     'vault-running': 409,

@@ -198,6 +198,8 @@ export const play = {
     'tables.refused.vault-role': 'This wallet does not hold that role on the vault.',
     'tables.refused.vault-fee': 'A fee is from 1% to 15%.',
     'tables.refused.vault-fees': 'The vault does not hold that much in fees.',
+    'tables.refused.vault-game': 'No game by that name is played for NURA.',
+    'tables.refused.vault-referee': 'That is not an address the vault can name.',
     'tables.refused.vault-paused': 'The vault is already paused.',
     'tables.refused.vault-running': 'The vault is not paused.',
     'tables.refused.vault-refused': 'The vault would refuse that.',

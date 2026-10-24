@@ -53,6 +53,16 @@ shorter break never cuts a longer one short, and whether one is running is Postg
 A break stops deposits and paid play; **withdrawals never stop**, for a minor and during a break
 too, because the money is theirs.
 
+## The fee a game takes
+
+**Each game takes the vault's fee unless the owner gave it one of its own** (`setGameFee` on the
+contract, 1% to 15%, 0 to take it away), and `open` refuses a stake signed at any other
+(`FeeMismatch` against `feeOf(game)`). `vault.terms()` reads `feeOf` for every game of the catalogue
+(`games` in `VaultSettings`, the seed's ids) beside the vault's own fee, and `feeFor(terms, game)` in
+`stake/policy.ts` is the one answer: what a consent is written at, what a ready and a signed search
+are checked against, and, in the browser, what the create form, the waiting room, the table and the
+wallet's terms say comes out of a pot. `GET /vault` carries `games`, each game's fee.
+
 ## A table with a stake
 
 **Live tables only, on the ladder, under the vault's ceiling** (`paid-pace`, `paid-stake`): 1, 5,
@@ -65,12 +75,12 @@ refused for it, because that would tell the host something private about the inv
 search never finds a paid table.
 
 **Ready is a signature.** `POST /tables/:id/stake` writes a consent for that chair: a fresh nonce,
-a secret and its commitment, the game, the stake, the vault's fee and a deadline half an hour away,
+a secret and its commitment, the game, the stake, the game's fee and a deadline half an hour away,
 and answers the EIP-712 typed data the wallet signs (`eth_signTypedData_v4`). Asking again replaces
 it and takes the reader's ready back. `POST /tables/:id/ready` with `signature` is checked: a
 consent that still has two minutes left (`LOCK_MARGIN_S`, on Postgres's clock), signed by the
 reader's wallet (`signedBy`: recovered locally, a contract wallet asked through ERC-1271), at the
-fee the vault has now, a stake under its ceiling, and that much NURA free in the vault
+game's fee as the vault has it now, a stake under its ceiling, and that much NURA free in the vault
 (`paid-consent`, `paid-stake`, `paid-funds`, `paid-paused`). Taking a ready back and leaving the
 chair forget the consent.
 
@@ -256,10 +266,15 @@ that, in one `ledger` read that also refreshes the terms every player reads; the
 its gas, whether it still holds `REFEREE_ROLE`, and how many nine-seat games that gas pays for at
 today's gas price (1.1M gas a game: `open` was measured at 943k and `settle` at 114k for nine
 seats), low under twenty; the roles the owner's wallet holds (`DEFAULT_ADMIN_ROLE`, `PAUSER_ROLE`);
-how many paid games are in each state; and the games stuck on the way: locking, paying or giving
+each game with the fee it takes and whether that is a fee of its own (the ledger reads `gameFee`
+for that, since a game's own fee can equal the vault's); who the vault names as its referee
+(`referee.named`); how many paid games are in each state; and the games stuck on the way: locking, paying or giving
 back for more than ten minutes, or carrying an error the chain gave, oldest first, fifty at most.
 
-**What it composes, and never sends**: a new fee, a new ceiling, fees taken out to the owner's own
+**What it composes, and never sends**: a new fee, a fee of a game's own or taking it away (`POST
+/admin/vault/game-fee`, `{ game, bps }`, 0 to take it away; a game not in the catalogue is
+`vault-game`), a new referee (`POST /admin/vault/referee`, `{ address }`, `vault-referee` for
+anything that is not an address or is the zero one), a new ceiling, fees taken out to the owner's own
 wallet, and a pause or a resume, each asked of the vault from the owner's address first, so what the
 vault would refuse is said in a sentence (`vault-role`, `vault-fee`, `vault-fees`, `vault-paused`,
 `vault-running`, `vault-refused`) before the wallet is asked anything. The owner's wallet sends it
@@ -267,6 +282,10 @@ through the path a deposit takes (`vault.send`). A new fee applies to stakes sig
 whose players signed the old one fails its lock and asks them to sign again, as any failed lock does.
 
 **The page** is `components/admin/admin-vault.component.azeroth`, the admin's Money section. It
+lists each game's fee to everybody who opens Money; to the owner it offers a game's own fee (a game
+and a fee) and "Use the vault's fee" on a game that has one, and a new referee, asked first as a
+question that loses something, because the old key stops locking and paying at once and nothing is
+locked or paid until this server signs with the new one (`NURA_REFEREE_KEY`). It
 offers only what the wallet's roles allow, asks before it pauses as a question that loses something
 (deposits and new games stop; withdrawals, payouts and reclaims carry on), keeps what was typed when
 something is refused, and says each result as a toast once the vault has been read again, as every

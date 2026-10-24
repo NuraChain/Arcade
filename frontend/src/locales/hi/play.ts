@@ -201,6 +201,8 @@ export const play: Pick<Dictionary, keyof typeof reference> = {
     'tables.refused.vault-role': 'इस वॉलेट के पास वॉल्ट पर वह भूमिका नहीं है।',
     'tables.refused.vault-fee': 'फ़ीस 1% से 15% तक हो सकती है।',
     'tables.refused.vault-fees': 'वॉल्ट में फ़ीस के इतने पैसे नहीं हैं।',
+    'tables.refused.vault-game': 'इस नाम का कोई गेम NURA के लिए नहीं खेला जाता।',
+    'tables.refused.vault-referee': 'यह ऐसा पता नहीं है जिसे वॉल्ट मान सके।',
     'tables.refused.vault-paused': 'वॉल्ट पहले से रुका हुआ है।',
     'tables.refused.vault-running': 'वॉल्ट रुका हुआ नहीं है।',
     'tables.refused.vault-refused': 'वॉल्ट इसे मना कर देगा।',

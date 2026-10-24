@@ -333,6 +333,11 @@ describe.skipIf(!active)('a table played for NURA, against a real database', () 
             expect(new Date(terms.deadline).getTime() / 1000).toBe(Number(typed.message.deadline));
             expect(consent.signature).toBeNull();
 
+            fake.state.terms = { ...fake.state.terms, games: { ludo: 700 } };
+            const own = JSON.parse((await ports.table.stake(guest.id, tableId)).typedData) as { message: Record<string, string | number> };
+            expect(own.message.feeBps, 'a game with a fee of its own is signed at that fee').toBe(700);
+            fake.state.terms = { ...fake.state.terms, games: {} };
+
             const again = await ports.table.stake(guest.id, tableId);
 
             expect(JSON.parse(again.typedData).message.nonce).not.toBe(consent.nonce);
@@ -369,7 +374,12 @@ describe.skipIf(!active)('a table played for NURA, against a real database', () 
 
             fake.state.terms = { ...fake.state.terms, fee: 250 };
             expect(await word(ports.table.setReady(guest.id, tableId, true, signFor(guest, terms.typedData)))).toBe('422 paid-consent');
-            fake.state.terms = { ...fake.state.terms, fee: 500 };
+            fake.state.terms = { ...fake.state.terms, fee: 500, games: { ludo: 700 } };
+            expect(await word(ports.table.setReady(guest.id, tableId, true, signFor(guest, terms.typedData))), 'the game was given a fee of its own').toBe('422 paid-consent');
+            fake.state.terms = { ...fake.state.terms, games: { hokm: 700 } };
+            fake.fund(guest.address, 9n);
+            expect(await word(ports.table.setReady(guest.id, tableId, true, signFor(guest, terms.typedData))), 'another game\'s fee is not this one\'s').toBe('409 paid-funds');
+            fake.state.terms = { ...fake.state.terms, games: {} };
 
             fake.fund(guest.address, 9n);
             expect(await word(ports.table.setReady(guest.id, tableId, true, signFor(guest, terms.typedData)))).toBe('409 paid-funds');
@@ -1305,6 +1315,10 @@ describe.skipIf(!active)('a table played for NURA, against a real database', () 
             const message = JSON.parse(second.typedData).message as Record<string, string | number>;
 
             expect(message).toMatchObject({ player: getAddress(searcher.address), game: 'ludo', amount: TEN, feeBps: 500 });
+
+            fake.state.terms = { ...fake.state.terms, games: { ludo: 700 } };
+            expect(JSON.parse((await ports.table.quickStake(searcher.id, 'ludo', TEN)).typedData).message.feeBps).toBe(700);
+            fake.state.terms = { ...fake.state.terms, games: {} };
             expect(JSON.parse(first.typedData).message.nonce).not.toBe(message.nonce);
             expect(await db.getRepository(StakeConsent).find({ where: { userId: searcher.id } })).toMatchObject([{ nonce: message.nonce, tableId: null, signature: null }]);
         });
@@ -1429,6 +1443,8 @@ describe.skipIf(!active)('a table played for NURA, against a real database', () 
             expect(await ports.admin.fee(player.id, 400)).toBeNull();
             expect(await ports.admin.fees(player.id, TEN)).toBeNull();
             expect(await ports.admin.pause(guest.id, true)).toBeNull();
+            expect(await ports.admin.gameFee(player.id, 'hokm', 700)).toBeNull();
+            expect(await ports.admin.referee(player.id, getAddress(WALLETS[1]))).toBeNull();
             expect(fake.adminCalls, 'a call was composed for somebody who is not the owner').toEqual([]);
             expect(await ports.admin.vault(owner.id)).toMatchObject({ configured: true, vault: fake.vault.address, chainId: 31337 });
         });
@@ -1449,6 +1465,8 @@ describe.skipIf(!active)('a table played for NURA, against a real database', () 
             expect(await ports.admin.ceiling(admin.id, TEN)).toBeNull();
             expect(await ports.admin.fees(admin.id, TEN)).toBeNull();
             expect(await ports.admin.pause(admin.id, true)).toBeNull();
+            expect(await ports.admin.gameFee(admin.id, 'hokm', 700)).toBeNull();
+            expect(await ports.admin.referee(admin.id, getAddress(WALLETS[1]))).toBeNull();
             expect(fake.adminCalls, 'a call was composed for an admin').toEqual([]);
             expect(await ports.admin.fee(owner.id, 400)).not.toBeNull();
         });
@@ -1470,7 +1488,8 @@ describe.skipIf(!active)('a table played for NURA, against a real database', () 
                 await escrowAt(tables[3].id, 'settled', 30)
             ];
 
-            fake.state.ledger = { ...fake.state.ledger, fees: 7n, free: 20n, locked: 30n, held: 57n, gas: 10n ** 18n, gasPrice: 47_000_000_000n };
+            fake.state.ledger = { ...fake.state.ledger, fees: 7n, free: 20n, locked: 30n, held: 57n, gas: 10n ** 18n, gasPrice: 47_000_000_000n, chainReferee: fake.vault.referee as Hex, ownFees: { ludo: 0, hokm: 700 } };
+            fake.state.terms = { ...fake.state.terms, games: { ludo: 500, hokm: 700 } };
 
             const standing = await ports.admin.vault(owner.id);
 
@@ -1479,6 +1498,7 @@ describe.skipIf(!active)('a table played for NURA, against a real database', () 
                 fee: 500,
                 minFee: 100,
                 maxFee: 1500,
+                games: [{ game: 'ludo', fee: 500, own: false }, { game: 'hokm', fee: 700, own: true }],
                 maxStake: (1_000n * WEI_PER_NURA).toString(),
                 paused: false,
                 held: '57',
@@ -1486,7 +1506,7 @@ describe.skipIf(!active)('a table played for NURA, against a real database', () 
                 locked: '30',
                 fees: '7',
                 solvent: true,
-                referee: { address: fake.vault.referee, gas: WEI_PER_NURA.toString(), games: '19', low: true, allowed: true },
+                referee: { address: fake.vault.referee, gas: WEI_PER_NURA.toString(), games: '19', low: true, allowed: true, named: fake.vault.referee },
                 roles: { admin: true, pauser: true },
                 playing: 1
             });
@@ -1523,18 +1543,28 @@ describe.skipIf(!active)('a table played for NURA, against a real database', () 
             expect(await ports.admin.ceiling(owner.id, TEN)).toMatchObject({ from: address });
             expect(await ports.admin.fees(owner.id, TEN)).toMatchObject({ from: address });
             expect(await ports.admin.pause(owner.id, true)).toMatchObject({ from: address });
+            expect(await ports.admin.gameFee(owner.id, 'hokm', 700)).toMatchObject({ from: address });
+            expect(await ports.admin.gameFee(owner.id, 'hokm', 0)).toMatchObject({ from: address });
+            expect(await ports.admin.referee(owner.id, WALLETS[1].toLowerCase())).toMatchObject({ from: address });
             expect(fake.adminCalls).toEqual([
                 { name: 'setFee', admin: address, args: [400] },
                 { name: 'setMaxStake', admin: address, args: [BigInt(TEN)] },
                 { name: 'withdrawFees', admin: address, args: [address, BigInt(TEN)] },
-                { name: 'pause', admin: address, args: [] }
+                { name: 'pause', admin: address, args: [] },
+                { name: 'setGameFee', admin: address, args: ['hokm', 700] },
+                { name: 'setGameFee', admin: address, args: ['hokm', 0] },
+                { name: 'setReferee', admin: address, args: [getAddress(WALLETS[1])] }
             ]);
 
             expect(await word(ports.admin.fee(owner.id, 1501)), 'a fee past the vault\'s own ceiling').toBe('422 vault-fee');
             expect(await word(ports.admin.fee(owner.id, 99)), 'a fee under the vault\'s own floor').toBe('422 vault-fee');
             expect(await word(ports.admin.ceiling(owner.id, 'ten')), 'an amount that is no amount').toBe('422 paid-amount');
             expect(await word(ports.admin.fees(owner.id, '0')), 'nothing to take').toBe('422 paid-amount');
-            expect(fake.adminCalls, 'the vault was asked about a call refused here').toHaveLength(4);
+            expect(await word(ports.admin.gameFee(owner.id, 'hokm', 99)), 'a game\'s fee under the floor').toBe('422 vault-fee');
+            expect(await word(ports.admin.gameFee(owner.id, 'roulette', 700)), 'a game nobody plays here').toBe('422 vault-game');
+            expect(await word(ports.admin.referee(owner.id, 'nobody')), 'no address').toBe('422 vault-referee');
+            expect(await word(ports.admin.referee(owner.id, `0x${ '0'.repeat(40) }`)), 'the zero address').toBe('422 vault-referee');
+            expect(fake.adminCalls, 'the vault was asked about a call refused here').toHaveLength(7);
 
             for (const [error, said] of [
                 ['AccessControlUnauthorizedAccount', '409 vault-role'],
@@ -1543,6 +1573,7 @@ describe.skipIf(!active)('a table played for NURA, against a real database', () 
                 ['EnforcedPause', '409 vault-paused'],
                 ['ExpectedPause', '409 vault-running'],
                 ['ZeroAmount', '422 paid-amount'],
+                ['ZeroAddress', '422 vault-referee'],
                 ['SomethingElse', '409 vault-refused']
             ])
             {
@@ -1564,6 +1595,8 @@ describe.skipIf(!active)('a table played for NURA, against a real database', () 
             expect(await word(ports.admin.ceiling(owner.id, TEN))).toBe('404 paid-off');
             expect(await word(ports.admin.fees(owner.id, TEN))).toBe('404 paid-off');
             expect(await word(ports.admin.pause(owner.id, true))).toBe('404 paid-off');
+            expect(await word(ports.admin.gameFee(owner.id, 'hokm', 700))).toBe('404 paid-off');
+            expect(await word(ports.admin.referee(owner.id, getAddress(WALLETS[1])))).toBe('404 paid-off');
         });
     });
 

@@ -1,6 +1,6 @@
 import type { HttpError } from '@azerothjs/http';
 import type { DataSource } from 'typeorm';
-import type { Address } from 'viem';
+import { getAddress, isAddress, type Address } from 'viem';
 
 import type { Asked, Vault } from '../../chain/vault.ts';
 import { Escrow } from '../../entities/escrow.entity.ts';
@@ -36,18 +36,23 @@ interface StuckRow
 
 const outOfRange = () => tableRefusal('vault-fee', 'A fee is from 1% to 15%.');
 
+const notGame = () => tableRefusal('vault-game', 'No game by that name is played for NURA.');
+
+const notReferee = () => tableRefusal('vault-referee', 'That is not an address the vault can name.');
+
 const REFUSED: Partial<Record<string, () => HttpError>> = {
     AccessControlUnauthorizedAccount: () => tableRefusal('vault-role', 'This wallet does not hold that role on the vault.'),
     FeeOutOfRange: outOfRange,
     InsufficientFees: () => tableRefusal('vault-fees', 'The vault does not hold that much in fees.'),
     EnforcedPause: () => tableRefusal('vault-paused', 'The vault is already paused.'),
     ExpectedPause: () => tableRefusal('vault-running', 'The vault is not paused.'),
-    ZeroAmount: notAmount
+    ZeroAmount: notAmount,
+    ZeroAddress: notReferee
 };
 
 const refusedBy = (error: string) => (REFUSED[error] ?? (() => tableRefusal('vault-refused', 'The vault would refuse that.')))();
 
-export function createVaultAdmin(db: DataSource, vault: Vault)
+export function createVaultAdmin(db: DataSource, vault: Vault, catalogue: readonly string[])
 {
     const answered = (admin: Address, asked: Asked) =>
     {
@@ -140,6 +145,7 @@ export function createVaultAdmin(db: DataSource, vault: Vault)
                 fee: ledger.terms.fee,
                 minFee: MIN_FEE_BPS,
                 maxFee: MAX_FEE_BPS,
+                games: Object.entries(ledger.terms.games).map(([game, fee]) => ({ game, fee, own: (ledger.ownFees[game] ?? 0) !== 0 })),
                 maxStake: ledger.terms.maxStake.toString(),
                 reclaimAfter: Number(ledger.terms.reclaimAfter),
                 paused: ledger.terms.paused,
@@ -153,7 +159,8 @@ export function createVaultAdmin(db: DataSource, vault: Vault)
                     gas: ledger.gas.toString(),
                     ...(games === null ? {} : { games: games.toString() }),
                     low: games !== null && games < GAMES_LOW,
-                    allowed: ledger.refereeAllowed
+                    allowed: ledger.refereeAllowed,
+                    named: ledger.chainReferee
                 },
                 roles: { admin: ledger.adminAllowed, pauser: ledger.pauserAllowed },
                 playing: count.get('open') ?? 0,
@@ -187,6 +194,41 @@ export function createVaultAdmin(db: DataSource, vault: Vault)
             }
 
             return answered(admin, await vault.feeCall(admin, feeBps));
+        },
+
+        async gameFee(admin: Address, game: string, feeBps: number)
+        {
+            if (!vault.configured)
+            {
+                throw notOpen();
+            }
+
+            if (!catalogue.includes(game))
+            {
+                throw notGame();
+            }
+
+            if (!Number.isInteger(feeBps) || (feeBps !== 0 && (feeBps < MIN_FEE_BPS || feeBps > MAX_FEE_BPS)))
+            {
+                throw outOfRange();
+            }
+
+            return answered(admin, await vault.gameFeeCall(admin, game, feeBps));
+        },
+
+        async referee(admin: Address, address: string)
+        {
+            if (!vault.configured)
+            {
+                throw notOpen();
+            }
+
+            if (!isAddress(address) || BigInt(address) === 0n)
+            {
+                throw notReferee();
+            }
+
+            return answered(admin, await vault.refereeCall(admin, getAddress(address)));
         },
 
         async ceiling(admin: Address, amount: string)
