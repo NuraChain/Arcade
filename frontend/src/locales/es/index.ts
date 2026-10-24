@@ -1,0 +1,17 @@
+import type { Dictionary } from '../en/index.ts';
+import { app } from './app.ts';
+import { landing } from './landing.ts';
+import { play } from './play.ts';
+import { social } from './social.ts';
+import { me } from './me.ts';
+import { wallet } from './wallet.ts';
+import { vault } from './vault.ts';
+import { admin } from './admin.ts';
+import { helpers } from './helpers.ts';
+import { helpersLudo } from './helpers-ludo.ts';
+import { helpersHokm } from './helpers-hokm.ts';
+import { helpersBackgammon } from './helpers-backgammon.ts';
+import { helpersPoker } from './helpers-poker.ts';
+import { helpersChess } from './helpers-chess.ts';
+
+export const es: Dictionary = { ...landing, ...app, ...play, ...social, ...wallet, ...vault, ...admin, ...me, ...helpers, ...helpersLudo, ...helpersHokm, ...helpersBackgammon, ...helpersPoker, ...helpersChess };
