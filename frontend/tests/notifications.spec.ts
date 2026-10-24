@@ -82,6 +82,8 @@ describe('where a notice leads', () =>
         expect(targetOf(notice('turn', { ref: { tableId: 't-2' } }))).toBe('/app/play/t-2');
         expect(targetOf(notice('group-added', { actor: 'maya.c', ref: { groupId: 'g-1' } }))).toBe('/app/groups/g-1');
         expect(targetOf(notice('message', { actor: 'maya.c', ref: { conversationId: 'c-1' } }))).toBe('/app/chats/c-1');
+        expect(targetOf(notice('invite-joined', { actor: 'maya.c' }))).toBe('/app/people/maya.c');
+        expect(sayOf(notice('invite-joined', { actor: 'maya.c' }), 'Maya', useLocale())).toBe('Maya joined through your link and played a first game');
     });
 
     it('sends somebody a host took out of a table to the games, not back to a table with no chair for them', () =>

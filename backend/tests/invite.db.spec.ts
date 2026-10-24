@@ -8,6 +8,7 @@ import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 import { Referral, User, entities } from '../src/entities/index.ts';
 import { syncSchema } from '../src/db/schema.ts';
 import { seedReference } from '../src/db/seed-reference.ts';
+import { createInviteService } from '../src/domains/invite/service.ts';
 import { buildPorts, type Services, type WriteListener } from '../src/services.ts';
 
 const url = process.env.TEST_DATABASE_URL;
@@ -128,5 +129,19 @@ describe.skipIf(!active)('invites, against a real database', () =>
 
         expect(await referrals()).toEqual([]);
         expect(await db.query(`select 1 from referrals where invitee_id = inviter_id`)).toEqual([]);
+    });
+
+    it('counts an invite once, when the invitee first finishes a game, and names who invited them', async () =>
+    {
+        const { account: inviter } = await enter();
+        const { account: invitee } = await enter(inviter.handle);
+        const { account: stranger } = await enter();
+        const idOf = async (handle: string) => (await db.getRepository(User).findOneByOrFail({ handle })).id;
+        const invites = createInviteService(db);
+        const [inviterId, inviteeId, strangerId] = await Promise.all([idOf(inviter.handle), idOf(invitee.handle), idOf(stranger.handle)]);
+
+        expect(await invites.counted([inviteeId, strangerId])).toEqual([{ inviterId, inviteeId }]);
+        expect(await invites.counted([inviteeId]), 'counted once').toEqual([]);
+        expect(await referrals()).toEqual([[invitee.handle, inviter.handle, 'counted']]);
     });
 });

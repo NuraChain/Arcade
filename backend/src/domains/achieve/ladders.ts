@@ -18,7 +18,7 @@ export type Metric =
     | { of: 'playedIn'; pace: Pace }
     | { of: 'global'; name: GlobalFact };
 
-export type GlobalFact = 'played' | 'won' | 'xp' | 'level' | 'days' | 'hosted' | 'opponents' | 'peak' | 'streak' | 'wonFull' | 'wonTurns' | 'wonLive' | 'wonDuel';
+export type GlobalFact = 'played' | 'won' | 'xp' | 'level' | 'days' | 'hosted' | 'opponents' | 'peak' | 'streak' | 'wonFull' | 'wonTurns' | 'wonLive' | 'wonDuel' | 'invited';
 
 export type GlobalFacts = Readonly<Record<GlobalFact, number>>;
 

@@ -274,10 +274,16 @@ const GLOBAL: Family[] = [
         one: 'Win a game at a table of four or more.'
     },
     {
-        id: 'won-turns', metric: { of: 'global', name: 'wonTurns' }, icon: 'clock', steps: dense(80),
+        id: 'won-turns', metric: { of: 'global', name: 'wonTurns' }, icon: 'clock', steps: dense(65),
         title: { en: 'Slow and steady', fa: 'آهسته و پیوسته' },
         blurb: { en: 'Win {n} turn-based games of anything.', fa: 'توی بازی‌های نوبتی، هر کدوم که باشه، {n} بار ببر.' },
         one: 'Win a turn-based game of anything.'
+    },
+    {
+        id: 'invited', metric: { of: 'global', name: 'invited' }, icon: 'invite', steps: [1, 2, 3, 5, 7, 10, 15, 20, 25, 35, 50, 75, 100, 150, 250],
+        title: { en: 'Bring friends', fa: 'رفیق‌آور' },
+        blurb: { en: 'Bring {n} people in with your link who then play a game.', fa: '{n} نفر رو با لینکت بیار که یه بازی هم بکنن.' },
+        one: 'Bring somebody in with your link who then plays a game.'
     }
 ];
 

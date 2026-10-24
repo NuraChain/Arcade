@@ -11,7 +11,8 @@ export const NOTIFICATION_ICON: Record<NotificationKind, IconName> = {
     'table-invite': 'seat',
     'table-removed': 'sign-out',
     'message': 'chats',
-    'turn': 'dice'
+    'turn': 'dice',
+    'invite-joined': 'invite'
 };
 
 const SAYS: Record<NotificationKind, MessageKey> = {
@@ -21,7 +22,8 @@ const SAYS: Record<NotificationKind, MessageKey> = {
     'table-invite': 'notify.tableInvite',
     'table-removed': 'notify.tableRemoved',
     'turn': 'notify.turn',
-    'message': 'notify.message'
+    'message': 'notify.message',
+    'invite-joined': 'notify.inviteJoined'
 };
 
 export function sayOf(item: Notification, who: string, locale: Pick<LocaleApi, 't' | 'plural'>)

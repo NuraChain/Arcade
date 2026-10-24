@@ -933,6 +933,27 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
     };
 
     /**
+     * The first game an invitee finishes is what makes their invite count: the inviter is told,
+     * and their ladder of people brought in is asked again. A courtesy, after the game is written.
+     */
+    const countInvites = async (matchId: string) =>
+    {
+        const { game, counted } = await invites.countedBy(matchId);
+
+        for (const { inviterId, inviteeId } of counted)
+        {
+            await db.transaction((tx) => achieve.record(tx, inviterId, matchId, game));
+            await tell({ userId: inviterId, kind: 'invite-joined', actorId: inviteeId, ref: {}, dedupeKey: `invite:${ inviteeId }` });
+        }
+    };
+
+    const finished = async (matchId: string) =>
+    {
+        await courtesy('result line', () => declareResult(matchId));
+        await courtesy('invite counted', () => countInvites(matchId));
+    };
+
+    /**
      * Tells whoever the turn passed to, but only where nobody is watching for it.
      *
      * A `turns` table gives a player twenty-four hours, so without this the product's answer to
@@ -1100,7 +1121,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
 
             if (load !== null && load.match.finishedAt !== null)
             {
-                await courtesy('result line', () => declareResult(walked.matchId));
+                await finished(walked.matchId);
                 stakes.kick();
             }
         }
@@ -1123,7 +1144,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
             await courtesy('turn notice', () => nudgeTurn(load, null));
         }
 
-        await courtesy('result line', () => declareResult(matchId));
+        await finished(matchId);
         live?.tableChanged(ended.tableId, await table.peopleAt(ended.tableId));
         stakes.kick();
     };
@@ -1187,7 +1208,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
 
             if (answer.load.match.finishedAt !== null)
             {
-                await courtesy('result line', () => declareResult(matchId));
+                await finished(matchId);
                 live?.tableChanged(answer.load.match.tableId, await table.peopleAt(answer.load.match.tableId));
                 stakes.kick();
             }
@@ -1270,7 +1291,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
 
             if (load.match.finishedAt !== null)
             {
-                await courtesy('result line', () => declareResult(expired.matchId));
+                await finished(expired.matchId);
                 live?.tableChanged(load.match.tableId, await table.peopleAt(load.match.tableId));
                 stakes.kick();
             }

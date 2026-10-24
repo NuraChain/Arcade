@@ -468,7 +468,7 @@
         "notices_fa_length :: CHECK (((char_length(fa) >= 3) AND (char_length(fa) <= 200)))",
         "notices_until_after :: CHECK ((until > created_at))",
         "notifications_count_positive :: CHECK ((count > 0))",
-        "notifications_kind_known :: CHECK (((kind)::text = ANY ((ARRAY['friend-request'::character varying, 'friend-accepted'::character varying, 'group-added'::character varying, 'table-invite'::character varying, 'table-removed'::character varying, 'message'::character varying, 'turn'::character varying])::text[])))",
+        "notifications_kind_known :: CHECK (((kind)::text = ANY ((ARRAY['friend-request'::character varying, 'friend-accepted'::character varying, 'group-added'::character varying, 'table-invite'::character varying, 'table-removed'::character varying, 'message'::character varying, 'turn'::character varying, 'invite-joined'::character varying])::text[])))",
         "player_stats_counts :: CHECK (((played >= 0) AND (won >= 0) AND (drawn >= 0) AND (abandoned >= 0) AND (((won + drawn) + abandoned) <= played)))",
         "player_stats_peak_reached :: CHECK (((peak_rating >= rating) OR (played = 0)))",
         "player_stats_range :: CHECK ((((rating >= 100) AND (rating <= 4000)) AND ((peak_rating >= 100) AND (peak_rating <= 4000))))",

@@ -1,6 +1,6 @@
-import { In, type DataSource, type EntityManager } from 'typeorm';
+import { In, IsNull, Not, type DataSource, type EntityManager } from 'typeorm';
 
-import { Match, MatchPlayer, PlayerStats, Table, User, UserAchievement } from '../../entities/index.ts';
+import { Match, MatchPlayer, PlayerStats, Referral, Table, User, UserAchievement } from '../../entities/index.ts';
 import type { AchievementFamily, AchievementLadder, AchievementSummary, EarnedAchievement, Leaderboard, LeaderboardWindow, PersonRecord, Standing } from '../../schemas.ts';
 import { GAME_FAMILIES, RUNGS, familiesOf } from './families.ts';
 import { measure, reached, rungId, scopeOf, type Family, type GlobalFacts, type LadderFacts, type Pace, type Rung } from './ladders.ts';
@@ -100,6 +100,8 @@ async function factsOf(runner: EntityManager, userId: string): Promise<Facts>
         .where(`t.host_id = :userId and ${ PLAYED_OUT }`, { userId })
         .getRawOne<{ count: number }>();
 
+    const invited = await runner.getRepository(Referral).count({ where: { inviterId: userId, countedAt: Not(IsNull()) } });
+
     const games = new Map<string, LadderFacts>();
     const of = (game: string) =>
     {
@@ -159,7 +161,8 @@ async function factsOf(runner: EntityManager, userId: string): Promise<Facts>
             wonFull: wins((row) => row.seats >= 4),
             wonTurns: wins((row) => row.mode === 'turns'),
             wonLive: wins((row) => row.mode === 'live'),
-            wonDuel: wins((row) => row.seats === 2)
+            wonDuel: wins((row) => row.seats === 2),
+            invited
         }
     };
 }

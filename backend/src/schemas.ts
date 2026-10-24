@@ -2300,7 +2300,10 @@ export const notificationKind = enumOf([
      * looking at the board, so one of these per turn there would be noise nobody wants - and the
      * sweep plays the turn of anybody who walked away from one.
      */
-    'turn'
+    'turn',
+
+    /** Somebody who came in through the reader's link has finished a first game. */
+    'invite-joined'
 ]);
 
 export type NotificationKind = Infer<typeof notificationKind>;

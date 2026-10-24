@@ -27,7 +27,7 @@ function seeded(seed: number): { draws: Draws; next: () => number }
 }
 
 const NO_GLOBAL: GlobalFacts = {
-    played: 0, won: 0, xp: 0, level: 1, days: 0, hosted: 0, opponents: 0, peak: 0, streak: 0, wonFull: 0, wonTurns: 0, wonLive: 0, wonDuel: 0
+    played: 0, won: 0, xp: 0, level: 1, days: 0, hosted: 0, opponents: 0, peak: 0, streak: 0, wonFull: 0, wonTurns: 0, wonLive: 0, wonDuel: 0, invited: 0
 };
 
 const facts = (over: Partial<LadderFacts> = {}): LadderFacts => ({

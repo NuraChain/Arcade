@@ -336,6 +336,7 @@ export const social = {
     'notify.friendRequest': '{who} wants to be friends',
     'notify.friendAccepted': '{who} accepted your request',
     'notify.groupAdded': '{who} added you to a group',
+    'notify.inviteJoined': '{who} joined through your link and played a first game',
     'notify.tableInvite': '{who} saved you a seat',
     'notify.tableRemoved': '{who} took you out of a {game} table',
     'notify.turn': 'Your turn at {game}',
